@@ -1,0 +1,11 @@
+# examples/praxec-meta-only.yaml
+#
+# Minimal gateway config that loads only the praxec-meta repo.
+# Smoke test:
+#
+#   praxec check --config examples/praxec-meta-only.yaml
+
+version: "1.0.0"
+
+repos:
+  - path: ..
