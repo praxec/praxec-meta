@@ -99,6 +99,31 @@ skills:
         key if you're confident in the spelling AND the provider
         supports it for the chosen model.
 
+      - **Reasoning models are safe as chain leads or rungs.** A
+        *reasoning* model (one that spends hidden reasoning tokens
+        before answering) may lead a `default:`/override list or
+        serve as any CoR rung. The engine caps per-turn reasoning
+        on every `kind: agent` step that sets no explicit
+        `reasoning_effort` (`ReasoningTuning.default_effort`, `low`
+        by default), so a reasoning model can no longer burn its
+        whole turn budget on hidden reasoning and return empty
+        content. Do NOT demote, deprioritize, exclude, or bury such
+        a model as a last-resort rung because it "seems slow" or
+        "hangs" — that latency is reasoning-token burn the engine
+        now bounds, not an unreachable or broken binding. If the
+        inventory surfaces the id, it resolves; order rungs by the
+        operator's genuine preference and operational distinctness,
+        never by whether a model reasons.
+
+      - **Prefer the engine reasoning default over hardcoding
+        `reasoning_effort`.** Because the engine already applies the
+        `low` cap (above), normally leave `reasoning_effort` unset
+        and let the default govern. Emit an explicit value only when
+        a specific step should reason *more* than the default. Note
+        `medium` is a no-op (it means "send nothing / provider
+        default"), so the only value that actually tightens the cap
+        is `low`.
+
       - **No silent CoR** — if you propose a CoR fallback, name
         WHY in the rationale. "openai is the primary; google as
         secondary because it shares the same affinity-tier and is
