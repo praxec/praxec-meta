@@ -14,6 +14,9 @@ workflows:
       target_definition_id: { type: string, required: true }
       since:                { type: string, default: "" }
       base_ref:             { type: string, default: main }
+      # Gateway config `praxec check` runs against — needs the parent
+      # context, not the bare emitted file. Defaults to cwd praxec.yaml.
+      gateway_config_path:  { type: string, default: "praxec.yaml" }
     initialState: mining_audit
     states:
       mining_audit:
@@ -73,7 +76,9 @@ workflows:
               use:
                 inputs:
                   chosen:    "$.context.chosen"
-                  kind:      "$.context.target_definition_id"
+                  # Literal tier discriminator — emit's `kind` snippet input
+                  # is a closed enum [capability, orchestrator], not an id.
+                  kind:      capability
                   namespace: "$.context.target_definition_id"
                 outputs:
                   "$.context.yaml_text":   yaml_text
@@ -89,7 +94,7 @@ workflows:
               definitionId: cap.verify.check-config
               use:
                 inputs:
-                  config_path: "$.context.target_path"
+                  gateway_config_path: "$.context.gateway_config_path"
                 outputs:
                   "$.context.check_ok":          ok
                   "$.context.check_diagnostics": diagnostics

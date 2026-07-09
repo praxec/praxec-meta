@@ -1,9 +1,12 @@
 # capabilities/cap.research.lexicon-lookup.yaml
 #
-# Typed wrapper over the gateway.lexicon.lookup MCP tool. Operators
-# wire a connection that surfaces the in-process gateway as an MCP
-# server (the same gateway can self-call); ships a reference
-# connection definition in `connections/gateway-self.yaml`.
+# Typed wrapper over the gateway's read tool `praxec.query`. A lexicon
+# lookup is dispatched by present-field shape:
+#   praxec.query { subject: "lexicon:<term>" } → describe the term.
+# Operators wire a connection that surfaces the in-process gateway as
+# an MCP server (`gateway_self`); this repo ships no connection of its
+# own (see praxec.repo.yaml), so the operator declares `gateway_self`
+# in their gateway config.
 
 workflows:
   cap.research.lexicon-lookup:
@@ -11,11 +14,12 @@ workflows:
     lifecycle: experimental
     description: >
       Look up a term in the gateway's lexicon overlay; emit definition
-      + governance metadata. Thin contract over the existing
-      gateway.lexicon.lookup MCP tool.
+      + governance metadata. Thin contract over `praxec.query` with a
+      `subject: "lexicon:<term>"` shape.
     snippet:
       inputs:
-        term: { type: string, required: true }
+        # Fully-qualified describe subject, e.g. `lexicon:verdict`.
+        subject: { type: string, required: true }
       outputs:
         entry: { type: object }
     initialState: ready
@@ -28,9 +32,9 @@ workflows:
             executor:
               kind: mcp
               connection: gateway_self
-              tool: gateway.lexicon.lookup
-              arguments:
-                term: "$.context.term"
+              tool: praxec.query
+              map:
+                subject: "$.context.subject"
             output:
               entry: "$.output"
       done: { terminal: true }

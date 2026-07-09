@@ -1,13 +1,13 @@
 # scripts-library/verify.capability-harness.yaml
 #
 # T22 — capability verification per affinity. Runs a golden contract
-# (prompt + verifier) against every binding in agents.yaml whose
+# (prompt + verifier) against every binding in models.yaml whose
 # override-key affinity matches the contract's affinity. Complements
 # the auth-only smoke test — that one proves credentials work; this
 # one proves the model can do the work.
 #
 # Inputs (argv):
-#   $1 — absolute path to `agents.yaml`
+#   $1 — absolute path to `models.yaml`
 #   $2 — absolute path to a contract YAML (see contracts/*.yaml)
 #
 # Output (stdout JSON):
@@ -49,9 +49,9 @@ scripts:
     body: |
       #!/usr/bin/env bash
       set -euo pipefail
-      AGENTS_PATH="${1:?missing agents.yaml path}"
+      MODELS_PATH="${1:?missing models.yaml path}"
       CONTRACT_PATH="${2:?missing contract path}"
-      [ -f "$AGENTS_PATH" ]   || { echo "{\"results\":[],\"error\":\"agents.yaml not found at $AGENTS_PATH\"}"; exit 0; }
+      [ -f "$MODELS_PATH" ]   || { echo "{\"results\":[],\"error\":\"models.yaml not found at $MODELS_PATH\"}"; exit 0; }
       [ -f "$CONTRACT_PATH" ] || { echo "{\"results\":[],\"error\":\"contract not found at $CONTRACT_PATH\"}"; exit 0; }
 
       # Load contract via python3 — the existing scripts in this
@@ -84,13 +84,13 @@ scripts:
       # key is a match when its leading affinity-segment equals the
       # contract's affinity (so `coding`, `coding-frontier`, `coding-standard`
       # all match the `coding` affinity contract).
-      BINDINGS=$(python3 - "$AGENTS_PATH" "$AFFINITY" "$INCLUDE_DEFAULT" <<'PY'
+      BINDINGS=$(python3 - "$MODELS_PATH" "$AFFINITY" "$INCLUDE_DEFAULT" <<'PY'
       import sys, yaml
       with open(sys.argv[1]) as f:
           doc = yaml.safe_load(f) or {}
       affinity = sys.argv[2]
       include_default = sys.argv[3].lower() == "true"
-      AFFS = {"coding", "reasoning", "prose", "web-search", "recon"}
+      AFFS = {"coding", "reasoning", "prose", "web-search", "recon", "agentic"}
       def leading_affinity(key):
           # `coding-frontier` -> `coding`; `frontier` -> None.
           for a in sorted(AFFS, key=len, reverse=True):

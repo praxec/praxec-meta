@@ -6,18 +6,24 @@ scripts:
     body: |
       #!/usr/bin/env bash
       # Mine transition records for a praxec workflow definition.
-      # v0.1 ships a portable stub that reads a JSON-lines audit log
+      # Ships a portable stub that reads a JSON-lines audit log
       # from $PRAXEC_AUDIT_LOG (defaults to /tmp/praxec-audit.log
       # if unset), filters by definition_id, and emits the structured
       # report shape the cap.audit.mine-transitions snippet declares.
+      #
+      # Inputs are positional argv — the script executor does not
+      # inject context slots as env vars:
+      #   $1 — definition_id (required)
+      #   $2 — since (epoch seconds; empty/0 = no lower bound)
       #
       # Operators with a real audit backend (postgres, datadog, etc.)
       # replace this script body with one that queries their
       # destination — the JSON envelope contract stays the same.
       set -euo pipefail
-      : "${DEFINITION_ID:?DEFINITION_ID must name the workflow}"
+      DEFINITION_ID="${1:?definition_id (argv[1]) required}"
+      SINCE="${2:-0}"  # epoch seconds; 0/empty = no lower bound
+      [ -z "$SINCE" ] && SINCE=0
       LOG="${PRAXEC_AUDIT_LOG:-/tmp/praxec-audit.log}"
-      SINCE="${SINCE:-0}"  # epoch seconds; 0 = no lower bound
 
       # Default empty report — operators with a real audit log
       # implement the actual mining; the stub demonstrates the shape.

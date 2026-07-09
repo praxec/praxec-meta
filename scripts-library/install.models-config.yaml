@@ -1,15 +1,21 @@
-# scripts-library/install.agents-config.yaml
+# scripts-library/install.models-config.yaml
 #
-# Atomic write of an `agents.yaml` file + round-trip validation
-# through the SAME loader `praxec walk` uses at startup
-# (`praxec validate-agents-config <path>`). FMECA U3 / U6
-# mitigation: temp-file + rename keeps the on-disk file consistent
-# under crash; the round-trip check refuses to leave a syntactically
-# wrong file behind.
+# Atomic write of a `models.yaml` file + round-trip validation
+# through the SAME loader the resolver uses at workflow start
+# (`px validate-agents-config <path>`). FMECA U3 / U6 mitigation:
+# temp-file + rename keeps the on-disk file consistent under crash;
+# the round-trip check refuses to leave a syntactically wrong file
+# behind.
 #
 # Subject root is `install` (SPEC §22.4 blessed verb) — the work
 # is installing a config file at a target path. The wrapping cap's
 # verb is `implement`, which is operator-semantics.
+#
+# Binary note: the round-trip validator lives on the `px` binary
+# (the interactive/CLI harness), NOT the `praxec` gateway binary.
+# Override with $PX_BIN if `px` is not on PATH. The subcommand is
+# still spelled `validate-agents-config` even though it validates a
+# models.yaml (the CLI help documents it as `validate-models-config`).
 #
 # Inputs (argv):
 #   $1 — YAML text to write (the rendered plan)
@@ -24,10 +30,10 @@
 #
 # Exit code: 0 if both write and round-trip succeed; 1 otherwise.
 # A failing round-trip ROLLS BACK the temp file rather than leave a
-# broken `agents.yaml` in place.
+# broken `models.yaml` in place.
 
 scripts:
-  install.agents-config:
+  install.models-config:
     verb: install
     lifecycle: stable
     source: praxec-meta
@@ -37,7 +43,9 @@ scripts:
       YAML_TEXT="${1:?missing YAML text}"
       TARGET="${2:?missing target path}"
 
-      BIN="${PRAXEC_BIN:-praxec}"
+      # The validator is a `px` (harness) subcommand, not a `praxec`
+      # (gateway) one. Override via $PX_BIN if `px` is not on PATH.
+      BIN="${PX_BIN:-px}"
 
       # Resolve the absolute target so the JSON envelope is unambiguous.
       TARGET_DIR=$(dirname "$TARGET")
@@ -47,7 +55,7 @@ scripts:
       # Atomic write: temp file in the SAME directory (cross-fs
       # rename would not be atomic), fsync, rename. Same-directory
       # is the only guarantee POSIX gives us for atomic-rename.
-      TMP=$(mktemp -p "$TARGET_DIR" .agents.yaml.XXXXXX)
+      TMP=$(mktemp -p "$TARGET_DIR" .models.yaml.XXXXXX)
       printf '%s' "$YAML_TEXT" > "$TMP"
 
       # Round-trip BEFORE the rename so a bad write never replaces a

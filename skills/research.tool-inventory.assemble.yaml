@@ -17,10 +17,14 @@ skills:
       proposing any shape, build a typed inventory of what the operator
       actually has reachable. Cover all five categories:
 
-      1. **MCP tools.** Call `gateway.describe` (or equivalent
-         introspection) to enumerate declared connections + the tools
-         each exposes. Capture connection name, tool name, and input
-         schema for every reachable tool.
+      1. **MCP tools.** Use `praxec.query` (the gateway's read tool —
+         `praxec.query {}` for the discovery home, `praxec.query
+         { subject }` to describe, `praxec.query { query, kind }` to
+         search) to enumerate declared connections + the tools each
+         exposes. The gateway itself exposes exactly two stable tools
+         (`praxec.query` / `praxec.command`); other MCP servers wired
+         as connections expose their own. Capture connection name,
+         tool name, and input schema for every reachable tool.
       2. **CLI scripts.** Walk the `scripts:` block of the live config.
          Each entry has a `verb`, `subject`, and either an inline
          `body` or external `uri + hash`. The verb tells you what kind
@@ -35,10 +39,13 @@ skills:
          contract; you can compose existing caps into new orchestrators
          without reauthoring them.
       5. **Connections (transport metadata).** For each connection,
-         capture its kind (`mcp` / `cli` / `rest`), endpoint or
-         command, and any externally-visible flag (`external: true`
-         marks it as a side-effecting connection per SPEC §4.1's
-         `coordinate` verb shape check).
+         capture its `kind:` (`mcp` / `cli` / `rest`) and its
+         `command:` (a string) and/or `url:`. These are the only
+         transport fields — there is no `type:` / `transport:` /
+         `external:` key (the connection structs are
+         `deny_unknown_fields`). A `coordinate`-verb cap is the tell
+         for a side-effecting connection, per SPEC §4.1's verb-shape
+         check.
 
       Emit `inventory` as `{ mcp_tools, cli_scripts, skills,
       capabilities, connections }` — each a typed array. The downstream

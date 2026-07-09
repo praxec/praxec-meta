@@ -9,11 +9,13 @@ scripts:
       # cap.verify.check-config cap projects: { ok: bool,
       # diagnostics: [string] }.
       #
-      # The CLI flag is the only required input; PRAXEC_BIN may
-      # override the binary path if the operator hasn't installed
-      # praxec to PATH.
+      # Input is positional argv[1] — the gateway config path. The
+      # script executor does not inject context slots as env vars, so
+      # inputs must arrive as `args:`, not env. PRAXEC_BIN may override
+      # the binary path if `praxec` is not on PATH. `check` is a
+      # `praxec` (gateway) subcommand.
       set -euo pipefail
-      : "${CONFIG_PATH:?CONFIG_PATH must name the YAML to check}"
+      CONFIG_PATH="${1:?gateway config path (argv[1]) required}"
       BIN="${PRAXEC_BIN:-praxec}"
 
       RAW=$(mktemp)

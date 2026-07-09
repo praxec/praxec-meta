@@ -1,29 +1,35 @@
 # praxec-meta
 
-> Self-authoring workflows for [praxec](https://github.com/anthropics/praxec) v0.6+.
+> Self-authoring workflows for [praxec](https://github.com/anthropics/praxec) 0.0.14+.
 >
-> Capabilities and orchestrators whose job is to **author** or
-> **optimize** other capabilities and orchestrators.
+> Capabilities and flows whose job is to **author** or **optimize**
+> other capabilities and flows.
 
 ---
 
 ## Why this exists
 
-praxec v0.6 introduces a two-tier composition model: typed
-**capabilities** (`cap.*`) invoked by lifecycle **orchestrators**
-(`flow.*`) via `use:` bindings. Authoring those tiers by hand is
-mechanical — pick a verb, draft a snippet contract, declare an
-initial state machine, run `praxec check`, iterate.
+praxec composes work in two authored tiers: typed **capabilities**
+(`cap.*`) invoked by lifecycle **flows** (`flow.*`) via `use:`
+bindings. Flows may also compose other flows (V11 is relaxed — a flow
+can invoke a nested flow, bounded at runtime by a sub-workflow depth
+cap). Authoring those tiers by hand is mechanical — pick a verb, draft
+a snippet contract, declare an initial state machine, run `praxec
+check`, iterate.
 
-This library encodes that authoring loop as four meta-orchestrators
-operators can run from any praxec-backed agent:
+This library encodes that authoring loop as four meta-flows operators
+can run from any praxec-backed agent:
 
-| Orchestrator | What it does |
+| Flow | What it does |
 |---|---|
 | `meta/flow.author-capability` | Draft a brand-new capability from a description + the operator's available tools |
-| `meta/flow.author-flow` | Draft a brand-new orchestrator that composes existing capabilities |
+| `meta/flow.author-flow` | Draft a brand-new flow that composes existing capabilities (and/or other flows) |
 | `meta/flow.optimize-capability` | Refine an existing capability based on audit history + adversarial review |
-| `meta/flow.optimize-flow` | Refine an existing orchestrator (state-shape, branch reduction, etc.) |
+| `meta/flow.optimize-flow` | Refine an existing flow (state-shape, branch reduction, etc.) |
+
+A fifth flow, `meta/flow.configure-models`, writes the operator's
+`.praxec/models.yaml` (the `gateway.models_yaml` file the resolver
+reads for `kind: agent` and affinity-resolved `kind: llm` steps).
 
 The point: **what each operator can reach for differs.** One operator
 has a dozen MCP servers; another has only CLI tooling and a small
@@ -91,8 +97,8 @@ richer cognitive-architectures versions.
 
 ## Versioning
 
-Tracks the underlying praxec spec version. v0.1 of this repo
-targets praxec v0.6.x.
+Tracks the underlying praxec version. This repo (0.3.0) targets
+praxec 0.0.14.
 
 ---
 

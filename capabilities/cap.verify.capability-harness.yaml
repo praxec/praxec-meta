@@ -18,13 +18,13 @@ workflows:
     lifecycle: experimental
     description: >
       Run a golden contract (prompt + verifier) against every binding
-      in agents.yaml whose override-key affinity matches the contract.
+      in models.yaml whose override-key affinity matches the contract.
       Output names per-binding pass/fail with the verifier kind +
       detail, NOT just a green/red. Exit 0 always — gating decisions
       live in the orchestrator that called this cap.
     snippet:
       inputs:
-        agents_config_path: { type: string, required: true }
+        models_config_path: { type: string, required: true }
         contract_path:      { type: string, required: true }
       outputs:
         contract_id: { type: string }
@@ -41,7 +41,7 @@ workflows:
               kind: script
               subject: verify.capability-harness
               args:
-                - "$.input.agents_config_path"
+                - "$.input.models_config_path"
                 - "$.input.contract_path"
             output:
               contract_id: "$.output.json.contract_id"

@@ -30,6 +30,11 @@ workflows:
             executor:
               kind: script
               subject: audit.mine-praxec-transitions
+              # Positional args — the script executor does not inject
+              # context slots as env vars; inputs must arrive via `args:`.
+              args:
+                - "$.input.definition_id"
+                - "$.input.since"
             output:
-              report: "$.output"
+              report: "$.output.json"
       done: { terminal: true }
