@@ -10,7 +10,7 @@ workflows:
     verb: plan
     lifecycle: experimental
     description: >
-      Recommend an `agents.yaml` plan given a provider model
+      Recommend a `models.yaml` plan given a provider model
       inventory and the workflow's delegate set. Output is one
       opinionated plan plus rationale; the human-approve-plan gate
       reviews before write. Per the FMECA: cite inventory entries
@@ -31,7 +31,7 @@ workflows:
     states:
       ready:
         goal: >
-          Compose one opinionated agents.yaml plan; cite inventory
+          Compose one opinionated models.yaml plan; cite inventory
           entries by id; surface rationale/tradeoffs/assumptions per
           the skill checklist.
         transitions:

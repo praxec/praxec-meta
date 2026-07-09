@@ -14,7 +14,7 @@ workflows:
     verb: gate
     lifecycle: experimental
     description: >
-      Decide whether to write the suggested agents.yaml plan.
+      Decide whether to write the suggested models.yaml plan.
       `auto` mode short-circuits with approved=true; `review_plan`
       blocks until the operator submits an approval (with optional
       edited plan) or a rejection. The chosen plan_final flows on
@@ -31,7 +31,7 @@ workflows:
           default: review_plan
         prompt:
           type: string
-          default: "Approve this agents.yaml plan, or hand back an edited version."
+          default: "Approve this models.yaml plan, or hand back an edited version."
       outputs:
         approved:   { type: boolean }
         plan_final: { type: object }

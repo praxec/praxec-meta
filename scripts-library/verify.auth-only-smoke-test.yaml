@@ -17,7 +17,7 @@
 # advertising over green-light optimism.
 #
 # Inputs (argv):
-#   $1 — absolute path to `agents.yaml` to smoke-test
+#   $1 — absolute path to `models.yaml` to smoke-test
 #
 # Output (stdout JSON):
 #   {
@@ -47,9 +47,9 @@ scripts:
     body: |
       #!/usr/bin/env bash
       set -euo pipefail
-      AGENTS_PATH="${1:?missing agents.yaml path}"
+      MODELS_PATH="${1:?missing models.yaml path}"
 
-      [ -f "$AGENTS_PATH" ] || { echo "{\"results\":[],\"disclaimer\":\"agents.yaml not found at $AGENTS_PATH\"}"; exit 0; }
+      [ -f "$MODELS_PATH" ] || { echo "{\"results\":[],\"disclaimer\":\"models.yaml not found at $MODELS_PATH\"}"; exit 0; }
 
       classify_status() {
         case "$1" in
@@ -64,7 +64,7 @@ scripts:
 
       # Extract all bindings as `<list-key>|<index>|<provider>|<model>` lines.
       # Uses python3 — present on every praxec-supported platform.
-      BINDINGS=$(python3 - "$AGENTS_PATH" <<'PY'
+      BINDINGS=$(python3 - "$MODELS_PATH" <<'PY'
       import sys, yaml
       with open(sys.argv[1]) as f:
           doc = yaml.safe_load(f) or {}
@@ -192,9 +192,11 @@ scripts:
       while IFS='|' read -r LIST IDX PROV MODEL; do
         [ -z "$LIST" ] && continue
         case "$PROV" in
-          anthropic) smoke_anthropic "$MODEL" "$LIST" "$IDX" ;;
-          openai)    smoke_openai    "$MODEL" "$LIST" "$IDX" ;;
-          google)    smoke_google    "$MODEL" "$LIST" "$IDX" ;;
+          anthropic)      smoke_anthropic "$MODEL" "$LIST" "$IDX" ;;
+          openai)         smoke_openai    "$MODEL" "$LIST" "$IDX" ;;
+          # models.yaml's canonical slug for Google is `gemini`; `google`
+          # kept as an alias for hand-written / legacy files.
+          gemini|google)  smoke_google    "$MODEL" "$LIST" "$IDX" ;;
           ollama)    smoke_local     "ollama"   "$MODEL" "$LIST" "$IDX" ;;
           lmstudio)  smoke_local     "lmstudio" "$MODEL" "$LIST" "$IDX" ;;
           *)         record "$PROV" "$MODEL" "$LIST" "$IDX" "ContentOther" "unsupported provider for smoke" ;;

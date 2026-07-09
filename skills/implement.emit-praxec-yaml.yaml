@@ -1,6 +1,6 @@
 # skills/implement.emit-praxec-yaml.yaml
 #
-# Render a chosen shape into a v0.2-conformant YAML body. The
+# Render a chosen shape into a praxec.repo/v1-conformant YAML body. The
 # downstream check-config step verifies the result; this skill
 # tells the agent how to produce something that has a chance of
 # passing.
@@ -53,18 +53,53 @@ skills:
       - V10: capabilities MAY NOT invoke other workflows via
         `kind: workflow`. They are composition leaves.
 
-      ### Orchestrators (`flow.*`)
+      ### Orchestrators / flows (`flow.*`)
 
-      - NO `snippet:` block (V8). NO `verb:` field (V9). Orchestrators
-        are entry points, not composable snippets.
-      - V11: orchestrators MAY NOT invoke other orchestrators. They
-        only invoke capabilities (or use other executor kinds
-        directly).
-      - V12: every `kind: workflow` executor targeting a `cap.*`
-        id MUST include a `use: { inputs, outputs }` binding.
-      - V13: every `use.inputs` path must resolve to a slot
-        declared in the orchestrator's `inputs:` block OR written
-        by an earlier state's `use.outputs`.
+      - NO `snippet:` block (V8). NO `verb:` field (V9). Flows are
+        entry points, not composable snippets. A nested flow types
+        its `use.outputs` from its own top-level `outputs:` block.
+      - V11 is RELAXED: a flow MAY invoke another flow via
+        `kind: workflow` (multi-flow programs — e.g. a top flow that
+        composes derisk / execute-cohort sub-flows). Recursion is
+        bounded at runtime by the sub-workflow `max_depth` cap, so
+        cyclic nesting fails fast at depth rather than hanging. (V10
+        still stands the other way: a `cap.*` may NOT invoke any
+        workflow — capabilities are composition leaves.)
+      - V12: every `kind: workflow` executor targeting a `cap.*` (or
+        nested `flow.*`) id MUST include a `use: { inputs, outputs }`
+        binding. `use.inputs` values are `$.scope.path` expressions
+        OR literals (a non-`$.` string passes through unchanged — use
+        a literal for closed-enum discriminators like a `kind` input).
+      - V13/V14: every `use.inputs` path must resolve to a slot
+        declared in the flow's `inputs:` block OR written by an
+        earlier state's `use.outputs`, and the resolved type must be
+        consistent with the target's declared slot type.
+
+      ### `kind: mcp` executors + connection shape
+
+      - The gateway's own MCP surface is exactly TWO stable tools:
+        `praxec.query` (read: home / search / describe / get / explain)
+        and `praxec.command` (write: start / submit / define). There is
+        no `gateway.describe` / `gateway.lexicon.*` tool — those are
+        dispatched by present-field shape on the two tools (e.g. a
+        lexicon lookup is `praxec.query { subject: "lexicon:<term>" }`;
+        a define is `praxec.command { subject: "lexicon:<term>",
+        definition: {...} }`).
+      - A `kind: mcp` executor names a `connection:` + `tool:` and maps
+        arguments with a `map:` block (`map: { targetArg: "$.path" | literal }`),
+        NOT an inline `arguments:` block (that key is ignored).
+      - Connection definitions use `kind:` (`mcp` | `cli` | `rest`) plus
+        `command:` (a string) and/or `url:` — NOT `type:` / `transport:`.
+        `deny_unknown_fields` is on, so invented keys (e.g. `external:`)
+        fail at load.
+
+      ### Authoring tiers
+
+      - The engine validates exactly TWO authored tiers: capabilities
+        (`cap.<verb>.<name>`) and flows (`flow.<name>`). There is no
+        third "hop_slot" authoring primitive in the engine today — the
+        stack-specialization / `hop_slot` work lives in a resource repo,
+        not the core validation cloud. Author caps and flows only.
 
       ## Discipline
 
