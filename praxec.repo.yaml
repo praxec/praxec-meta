@@ -1,11 +1,11 @@
 schema: praxec.repo/v1
 name: praxec-meta
 namespace: meta
-version: 0.3.0
+version: 0.4.0
 description: |
   Meta-authoring workflows for praxec 0.0.14+: capabilities and
-  flows whose job is to author or optimize other capabilities and
-  flows.
+  flows whose job is to author, optimize, or REPAIR other capabilities
+  and flows.
 
   Operators load this repo alongside cognitive-architectures (or any
   other resource repo) to get a self-bootstrapping authoring loop:
@@ -22,7 +22,16 @@ description: |
     - meta/flow.author-flow
     - meta/flow.optimize-capability
     - meta/flow.optimize-flow
-    - meta/flow.configure-models       (models.yaml setup)
+    - meta/flow.configure-models         (models.yaml setup)
+    - meta/flow.repair-workflow-health   (heal a misconfigured gateway)
+
+  flow.repair-workflow-health closes the self-heal loop for the
+  gateway's DEGRADED health surface: `praxec check` → repair the
+  offending workflow from its diagnostics → re-check, bounded and
+  escalating to a human on exhaustion. Run it from a healthy meta
+  gateway pointed at the broken config; it edits files, never needing
+  the broken gateway to run. Caps: cap.verify.check-config (existing) +
+  cap.refactor.repair-from-diagnostic (skill refactor.repair-workflow).
 
   The first four share a small cap stack: tool-inventory (introspect
   what's reachable), compose-implementation (propose shapes),

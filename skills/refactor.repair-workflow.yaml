@@ -1,0 +1,61 @@
+# skills/refactor.repair-workflow.yaml
+#
+# Instructions for the agent that repairs a workflow/config fault surfaced by
+# `praxec check` (or by the gateway's DEGRADED HealthReport). The downstream
+# re-check step verifies the result; this skill tells the agent how to make the
+# smallest correct edit that clears the fault without changing intended behavior.
+
+skills:
+  refactor.repair-workflow:
+    verb: refactor
+    lifecycle: experimental
+    source: praxec-meta
+    body: |
+      # Repairing a praxec config fault from its diagnostic
+
+      You are given one or more diagnostics (each usually
+      `CODE: workflow '<id>' state '<s>' transition '<t>': <explanation>`)
+      and the gateway config path. Make the SMALLEST edit that clears the
+      fault while preserving the workflow's intended behavior, then stop.
+      The downstream `praxec check` re-run is the acceptance gate — do not
+      claim success; let the check decide.
+
+      ## Procedure
+
+      1. Parse each diagnostic's `CODE` and location (`workflow`/`state`/
+         `transition`). The CODE is the precise fault class — fix to the
+         code, not to a guess.
+      2. Open the offending file (the one under a `repos:` path whose
+         workflow id matches the location). Read the transition in full
+         before editing.
+      3. Apply the minimal repair for the code (see the recipe table).
+      4. Save the file. Do NOT touch unrelated workflows or reformat the
+         whole file — a tight diff keeps the repair reviewable.
+
+      ## Repair recipes (grow this table as new codes appear)
+
+      - **SLOT_KEY_ENGINE_OWNED** — a non-`hop_slot` transition writes an
+        engine-owned slot key (`verify`/`detect`/`scaffold`/`implement`/
+        `lint_format`) via `output:` or `use.outputs`.
+        - If the transition IS the resolved slot cap (its workflow declares
+          `snippet.outputs.<slot>: { $ref: praxec://hop#/$defs/<slot>Out }`),
+          the engine already exempts it — re-run check; a stale binary is the
+          cause, tell the operator to reinstall/reconnect.
+        - If it is a FLOW transition producing the slot, mark it
+          `hop_slot: <slot>` (and drop the manual `output:`/`use.outputs`
+          slot write — the engine injects it).
+        - Otherwise the write is illegitimate: rename the context key to a
+          non-slot name (e.g. `verify` → `verify_result`).
+      - **GUARD_UNSET_SLOT / bare-slot-key guards** — a guard references a
+        `$.context.<slot>` never produced upstream; either produce it via the
+        proper `hop_slot:`/cap, or correct the guard's key.
+      - **switch-with-no-default (warning)** — add a default (no-guard)
+        deterministic transition routing the unexpected value to an explicit
+        error/human state.
+      - **Unknown code** — read the explanation text; it states the remedy.
+        Apply it literally, minimally.
+
+      ## Output
+
+      Submit a short `summary` of exactly what you changed and the list of
+      `files_changed`. Keep it factual — the re-check is the proof.
