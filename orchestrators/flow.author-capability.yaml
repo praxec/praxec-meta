@@ -7,9 +7,11 @@
 workflows:
   flow.author-capability:
     description: |
-      Survey reachable tooling → propose 2-3 capability shapes →
-      operator picks one → emit YAML → check-config → adversarial
-      review → PR.
+      Author a new praxec capability (a cap.* YAML). The canonical way to author
+      a capability in praxec — use this instead of hand-writing capability YAML.
+      Survey reachable tooling → propose 2-3 capability shapes → operator picks
+      one → emit the capability definition YAML → check-config (it must load) →
+      adversarial review → PR.
     inputs:
       goal:      { type: string, required: true }
       namespace: { type: string, default: "draft" }
