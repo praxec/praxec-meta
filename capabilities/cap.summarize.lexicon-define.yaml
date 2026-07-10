@@ -1,4 +1,10 @@
 # capabilities/cap.summarize.lexicon-define.yaml
+#
+# Register a new term in the gateway's lexicon overlay. Thin wrapper
+# over the gateway's write tool `praxec.command`, which dispatches a
+# define by present-field shape:
+#   praxec.command { subject: "lexicon:<term>", definition: {...} }
+# Requires lexicon writes to be enabled on the gateway (SPEC §32).
 
 workflows:
   cap.summarize.lexicon-define:
@@ -6,12 +12,14 @@ workflows:
     lifecycle: experimental
     description: >
       Register a new term in the gateway's lexicon overlay. Thin
-      wrapper over gateway.lexicon.define.
+      wrapper over `praxec.command` with a
+      `subject: "lexicon:<term>"` + `definition` shape.
     snippet:
       inputs:
-        term:       { type: string, required: true }
-        definition: { type: string, required: true }
-        governance: { type: string, default: "advisory" }
+        # Fully-qualified define subject, e.g. `lexicon:verdict`.
+        subject: { type: string, required: true }
+        # Define payload — { definition_short, governance?, ... }.
+        definition: { type: object, required: true }
       outputs:
         registered: { type: object }
     skills: [summarize.lexicon-extend]
@@ -25,11 +33,10 @@ workflows:
             executor:
               kind: mcp
               connection: gateway_self
-              tool: gateway.lexicon.define
-              arguments:
-                term:       "$.context.term"
+              tool: praxec.command
+              map:
+                subject:    "$.context.subject"
                 definition: "$.context.definition"
-                governance: "$.context.governance"
             output:
               registered: "$.output"
       done: { terminal: true }

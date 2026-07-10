@@ -1,6 +1,7 @@
 # capabilities/cap.verify.auth-only-smoke-test.yaml
 #
-# 1-token completion per binding proving auth + model availability.
+# 1-token completion per binding in models.yaml proving auth + model
+# availability.
 # The cap name (and its output `disclaimer`) deliberately surface
 # the limitation: AUTH verified, CAPABILITY NOT TESTED. A model
 # that authenticates may still fail to code, reason, or honor
@@ -12,7 +13,7 @@ workflows:
     verb: verify
     lifecycle: experimental
     description: >
-      Probe each binding in the just-written `agents.yaml` with a
+      Probe each binding in the just-written `models.yaml` with a
       1-token completion (or equivalent presence check for local
       providers). Output names the limitation explicitly:
       "auth verified, capability not tested." Exit 0 always — the
@@ -20,7 +21,7 @@ workflows:
       surface.
     snippet:
       inputs:
-        agents_config_path: { type: string, required: true }
+        models_config_path: { type: string, required: true }
       outputs:
         results:    { type: array }
         disclaimer: { type: string }
@@ -35,7 +36,7 @@ workflows:
               kind: script
               subject: verify.auth-only-smoke-test
               args:
-                - "$.input.agents_config_path"
+                - "$.input.models_config_path"
             output:
               results:    "$.output.json.results"
               disclaimer: "$.output.json.disclaimer"

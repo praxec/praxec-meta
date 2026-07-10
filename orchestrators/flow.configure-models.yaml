@@ -1,8 +1,12 @@
 # orchestrators/flow.configure-models.yaml
 #
-# The guided agents.yaml setup flow. Inventories the operator's
+# The guided models.yaml setup flow. Inventories the operator's
 # reachable providers → composes a binding plan → gets approval →
 # writes atomically + round-trip-validates → smoke-tests auth.
+#
+# Canonical target: `.praxec/models.yaml` (the `gateway.models_yaml`
+# key). Both `kind: agent` bindings and affinity-resolved `kind: llm`
+# steps resolve against this file.
 #
 # v0.3 deliverable per the FMECA-vetted plan
 # (`/home/mc/.claude/plans/tender-honking-plum.md`):
@@ -16,12 +20,12 @@ workflows:
   flow.configure-models:
     description: |
       Inventory providers → suggest bindings → approve plan →
-      write agents.yaml atomically with round-trip → smoke-test
+      write models.yaml atomically with round-trip → smoke-test
       auth per binding.
 
       Inputs let operators run unattended (mode=auto) or guided
       (mode=review_plan, default). The orchestrator branches to
-      `failed` on round-trip rejection so a broken agents.yaml
+      `failed` on round-trip rejection so a broken models.yaml
       never replaces a good one.
     inputs:
       providers:
@@ -36,7 +40,7 @@ workflows:
         default: review_plan
       target_path:
         type: string
-        default: ".praxec/agents.yaml"
+        default: ".praxec/models.yaml"
       # Optional capability verification after the auth-only smoke
       # passes. Set to a contract path (e.g. contracts/reasoning-
       # arithmetic-v1.yaml) to run that contract against the matching
@@ -123,7 +127,7 @@ workflows:
             actor: deterministic
             executor:
               kind: workflow
-              definitionId: cap.implement.write-agents-config
+              definitionId: cap.implement.write-models-config
               use:
                 inputs:
                   plan_final:  "$.context.plan_final"
@@ -158,7 +162,7 @@ workflows:
               definitionId: cap.verify.auth-only-smoke-test
               use:
                 inputs:
-                  agents_config_path: "$.context.written_path"
+                  models_config_path: "$.context.written_path"
                 outputs:
                   "$.context.smoke_results":    results
                   "$.context.smoke_disclaimer": disclaimer
@@ -188,7 +192,7 @@ workflows:
               definitionId: cap.verify.capability-harness
               use:
                 inputs:
-                  agents_config_path: "$.context.written_path"
+                  models_config_path: "$.context.written_path"
                   contract_path:      "$.workflow.input.capability_contract"
                 outputs:
                   "$.context.capability_contract_id": contract_id

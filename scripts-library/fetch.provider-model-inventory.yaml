@@ -40,9 +40,17 @@
 # the raw status + body. No silent skips.
 #
 # Inputs (argv): the first argument is a comma-separated list of
-# provider names; supported set is closed at v0.3 (anthropic, openai,
+# provider names; supported set is closed (anthropic, openai,
 # google, ollama, lmstudio). Unknown names go to `errors` with kind
 # UNSUPPORTED_PROVIDER.
+#
+# NOTE — these are HTTP-PROBE tokens (which catalog endpoint to hit),
+# NOT the models.yaml `provider.name` slugs the plan writes. The
+# engine's write slugs are anthropic | openai | gemini | openrouter |
+# ollama | llamacpp | bedrock | custom{endpoint}. In particular this
+# probe's `google` maps to the models.yaml slug `gemini`, and
+# `lmstudio` maps to `custom` (OpenAI-compatible endpoint). The
+# plan.suggest-bindings skill documents the correct write slugs.
 
 scripts:
   fetch.provider-model-inventory:

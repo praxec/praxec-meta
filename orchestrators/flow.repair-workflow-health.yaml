@@ -1,0 +1,96 @@
+# orchestrators/flow.repair-workflow-health.yaml
+#
+# The declarative self-heal loop for a misconfigured gateway. When the gateway
+# comes up DEGRADED (config load failed), its HealthReport names the fault code +
+# location. This flow closes the loop: run `praxec check` on the config file
+# (works even while the gateway is degraded — it shells out to the CLI), and
+# while errors remain, apply the minimal repair and re-check, bounded by a round
+# counter, escalating to a human on exhaustion. On success it tells the operator
+# to reconnect the MCP server so a fresh process loads the corrected config.
+#
+# INVOCATION: run this from a HEALTHY gateway that loads praxec-meta (e.g. a
+# meta-only authoring config), pointing `gateway_config_path` at the BROKEN
+# config. The repair edits the broken config's files; it never needs the broken
+# gateway to be running.
+
+workflows:
+  flow.repair-workflow-health:
+    description: |
+      Heal a misconfigured gateway: check-config → (healthy? done) →
+      repair-from-diagnostic → re-check, bounded by `max_repair_rounds`,
+      escalating to a human on exhaustion. Never silently passes or fails.
+    inputs:
+      # The gateway config to heal (the one that came up degraded).
+      gateway_config_path: { type: string, required: true }
+      # Bound on repair attempts before escalating (LoopGuard).
+      max_repair_rounds:   { type: integer, default: 3 }
+      # Round counter — do not set; the loop increments it.
+      repair_round:        { type: integer, default: 0 }
+    initialState: assessing
+    states:
+      assessing:                 # ASSESS — run `praxec check` on the CURRENT file
+        goal: Run praxec check on the gateway config; capture ok + diagnostics.
+        transitions:
+          check:
+            target: gate
+            actor: deterministic
+            executor:
+              kind: workflow
+              definitionId: cap.verify.check-config
+              use:
+                inputs:
+                  gateway_config_path: "$.context.gateway_config_path"
+                outputs:
+                  "$.context.check_ok":          ok
+                  "$.context.check_diagnostics": diagnostics
+
+      gate:
+        transitions:
+          healthy:               # 0 errors -> nothing to repair
+            target: healed
+            actor: deterministic
+            guards:
+              - { kind: expr, expr: "$.context.check_ok == true" }
+          repair:                # errors remain, budget remains -> repair + count
+            target: repairing
+            actor: deterministic
+            guards:
+              - { kind: expr, expr: "$.context.check_ok == false" }
+              - { kind: expr, expr: "$.context.repair_round < $.context.max_repair_rounds" }
+            output:
+              repair_round: { add: ["$.context.repair_round", 1] }
+          escalate:              # budget exhausted -> human (never silent)
+            target: escalated
+            actor: deterministic
+            guards:
+              - { kind: expr, expr: "$.context.check_ok == false" }
+              - { kind: expr, expr: "$.context.repair_round >= $.context.max_repair_rounds" }
+
+      repairing:                 # REPAIR — minimal edit from the diagnostics, then re-assess
+        transitions:
+          repair:
+            target: assessing    # guarded back-edge (bounded by repair_round)
+            actor: deterministic
+            executor:
+              kind: workflow
+              definitionId: cap.refactor.repair-from-diagnostic
+              use:
+                inputs:
+                  diagnostics:         "$.context.check_diagnostics"
+                  gateway_config_path: "$.context.gateway_config_path"
+                outputs:
+                  "$.context.last_repair_summary": summary
+                  "$.context.last_files_changed":  files_changed
+
+      healed:
+        goal: >
+          Config validates. Reconnect the MCP server (a fresh process loads the
+          corrected config and comes up healthy).
+        terminal: true
+
+      escalated:
+        goal: >
+          Repair budget exhausted with errors remaining. A human must resolve
+          the residual diagnostics ($.context.check_diagnostics) before the
+          gateway can serve.
+        terminal: true

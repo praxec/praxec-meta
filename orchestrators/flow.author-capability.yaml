@@ -14,6 +14,11 @@ workflows:
       goal:      { type: string, required: true }
       namespace: { type: string, default: "draft" }
       base_ref:  { type: string, default: main }
+      # Gateway config whose `repos:` load the directory the emitted
+      # definition is saved into — `praxec check` needs the parent
+      # context, not the bare emitted file. Defaults to the resolver's
+      # cwd `praxec.yaml`.
+      gateway_config_path: { type: string, default: "praxec.yaml" }
     initialState: surveying_tools
     states:
       surveying_tools:
@@ -72,7 +77,11 @@ workflows:
               use:
                 inputs:
                   chosen:    "$.context.chosen"
-                  kind:      "$.context.goal"
+                  # Literal tier discriminator — the emit cap's `kind`
+                  # snippet input is a closed enum [capability, orchestrator],
+                  # NOT the free-text goal. Passing the goal here would fail
+                  # the child's snippet-input enum validation.
+                  kind:      capability
                   namespace: "$.context.namespace"
                 outputs:
                   "$.context.yaml_text":   yaml_text
@@ -88,7 +97,7 @@ workflows:
               definitionId: cap.verify.check-config
               use:
                 inputs:
-                  config_path: "$.context.target_path"
+                  gateway_config_path: "$.context.gateway_config_path"
                 outputs:
                   "$.context.check_ok":          ok
                   "$.context.check_diagnostics": diagnostics

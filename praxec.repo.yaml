@@ -1,11 +1,11 @@
 schema: praxec.repo/v1
 name: praxec-meta
 namespace: meta
-version: 0.2.0
+version: 0.4.0
 description: |
-  Meta-authoring workflows for praxec v0.6+: capabilities and
-  orchestrators whose job is to author or optimize other capabilities
-  and orchestrators.
+  Meta-authoring workflows for praxec 0.0.14+: capabilities and
+  flows whose job is to author, optimize, or REPAIR other capabilities
+  and flows.
 
   Operators load this repo alongside cognitive-architectures (or any
   other resource repo) to get a self-bootstrapping authoring loop:
@@ -17,26 +17,37 @@ description: |
   Loaded ids land under `meta/<id>` — e.g. `meta/flow.author-capability`,
   `meta/cap.research.tool-inventory`.
 
-  The meta orchestrators (v0.1 + v0.2):
+  The meta flows:
     - meta/flow.author-capability
     - meta/flow.author-flow
     - meta/flow.optimize-capability
     - meta/flow.optimize-flow
-    - meta/flow.configure-models       (v0.2 — agents.yaml setup)
+    - meta/flow.configure-models         (models.yaml setup)
+    - meta/flow.repair-workflow-health   (heal a misconfigured gateway)
+
+  flow.repair-workflow-health closes the self-heal loop for the
+  gateway's DEGRADED health surface: `praxec check` → repair the
+  offending workflow from its diagnostics → re-check, bounded and
+  escalating to a human on exhaustion. Run it from a healthy meta
+  gateway pointed at the broken config; it edits files, never needing
+  the broken gateway to run. Caps: cap.verify.check-config (existing) +
+  cap.refactor.repair-from-diagnostic (skill refactor.repair-workflow).
 
   The first four share a small cap stack: tool-inventory (introspect
   what's reachable), compose-implementation (propose shapes),
   emit-yaml (generate snippet-contract-compliant YAML), check-config
-  (run `praxec check` on the result), audit-mine-transitions
-  (for the optimize variants), plus thin typed wrappers over the
-  existing `gateway.lexicon.*` MCP tools so authored content stays
-  vocabulary-consistent.
+  (run `praxec check` on the operator's gateway config),
+  audit-mine-transitions (for the optimize variants), plus thin typed
+  wrappers over the gateway's two-tool surface (`praxec.query` /
+  `praxec.command`) for lexicon lookup/define so authored content
+  stays vocabulary-consistent.
 
   `flow.configure-models` adds five caps for the LLM-binding setup
   flow: research.model-inventory, plan.suggest-bindings,
-  gate.human-approve-plan, implement.write-agents-config,
-  verify.auth-only-smoke-test. Wires the FMECA-vetted agent
-  resolver design from praxec v0.3.
+  gate.human-approve-plan, implement.write-models-config,
+  verify.auth-only-smoke-test. It writes the canonical
+  `.praxec/models.yaml` (`gateway.models_yaml`) the resolver reads
+  for `kind: agent` and affinity-resolved `kind: llm` steps.
 
 layout:
   capabilities:  capabilities

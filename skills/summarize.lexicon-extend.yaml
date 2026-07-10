@@ -38,18 +38,20 @@ skills:
 
       ## What to register
 
-      Each `gateway.lexicon.define` call needs:
+      A define is a `praxec.command` call dispatched by shape:
+      `praxec.command { subject: "lexicon:<term>", definition: {...} }`.
+      It needs:
 
-      - **`term`** — the canonical short form. Lowercase
-        kebab-case if multi-word.
-      - **`definition`** — one or two sentences. State what the
-        term MEANS in this codebase, not what it means generally.
-        "A `verdict` is a tri-valued output from a vet step:
-        `pass`, `fail`, or `needs-revision`."
-      - **`governance`** — default to `advisory` for terms a single
-        author coined; bump to `human-only` for terms that
-        cross-cutting orchestrators rely on (so future agents
-        can't silently redefine them).
+      - **`subject`** — `lexicon:<term>`, where `<term>` is the
+        canonical short form. Lowercase kebab-case if multi-word.
+      - **`definition.definition_short`** — one or two sentences.
+        State what the term MEANS in this codebase, not what it means
+        generally. "A `verdict` is a tri-valued output from a vet
+        step: `pass`, `fail`, or `needs-revision`."
+      - **`definition.governance`** — default to `advisory` for terms
+        a single author coined; bump to `human-only` for terms that
+        cross-cutting flows rely on (so future agents can't silently
+        redefine them).
 
       ## Anti-patterns
 

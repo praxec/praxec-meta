@@ -1,6 +1,6 @@
 # skills/plan.suggest-bindings.yaml
 #
-# Compose a binding plan for `agents.yaml` from a provider model
+# Compose a binding plan for `models.yaml` from a provider model
 # inventory + the operator's intended delegate set. Same shape
 # discipline as `plan.compose-implementation`: a plan, not a single
 # answer; tradeoffs surfaced; assumptions cited.
@@ -11,12 +11,12 @@ skills:
     lifecycle: stable
     source: praxec-meta
     body: |
-      # Composing a binding plan for agents.yaml
+      # Composing a binding plan for models.yaml
 
       You have a provider model inventory (the typed output of
       `cap.research.model-inventory`) and a delegate set (the
       affinity-tier pairs the operator's workflows reference).
-      Your job is to recommend a single `agents.yaml` plan with:
+      Your job is to recommend a single `models.yaml` plan with:
 
       - **One mandatory `default:` list** — the catch-all the
         specificity walk falls through to. Pick one binding good
@@ -76,24 +76,53 @@ skills:
         the smoke test fails immediately; better to fail in the
         compose step where the operator sees the diagnostic.
 
-      - **Closed-enum providers only** — `anthropic | openai |
-        google | ollama | lmstudio | custom`. The `custom` provider
-        requires a non-empty `endpoint:` field; if the inventory
-        surfaces a model that isn't from one of the five known
-        providers, route it through `custom` with the explicit
-        endpoint.
+      - **Closed-enum providers only** — the `provider: { name: ... }`
+        slug is one of `anthropic | openai | gemini | openrouter |
+        ollama | llamacpp | bedrock | custom`. Note Google's slug is
+        `gemini` (NOT `google`). `custom` is the OpenAI-compatible
+        escape hatch and requires a non-empty `endpoint:` field; if
+        the inventory surfaces a model from an unlisted self-hosted /
+        proxy endpoint, route it through `custom` with the explicit
+        endpoint. Any other `name:` fails at load (`deny_unknown_fields`).
 
       - **Closed-enum override keys only** — affinity ∈
-        `{coding, reasoning, prose, web-search, recon}`, tier ∈
-        `{frontier, standard, commoditized}`. A key like
+        `{coding, reasoning, prose, web-search, recon, agentic}`,
+        tier ∈ `{frontier, standard, commoditized}`. A key like
         `vision-frontier` fails at load — better to leave the
         delegate falling through to `default` than to invent.
+        (`agentic` = tool-driving / intent→tool-calls, e.g. the
+        cockpit conductor or any tool-looping `kind: llm` step.)
 
       - **Be honest about feature flags** — `extended_thinking`,
         `reasoning_effort`, etc. are typed per provider; a typo
         like `reasoning_effrt` fails at load. Only emit a feature
         key if you're confident in the spelling AND the provider
         supports it for the chosen model.
+
+      - **Reasoning models are safe as chain leads or rungs.** A
+        *reasoning* model (one that spends hidden reasoning tokens
+        before answering) may lead a `default:`/override list or
+        serve as any CoR rung. The engine caps per-turn reasoning
+        on every `kind: agent` step that sets no explicit
+        `reasoning_effort` (`ReasoningTuning.default_effort`, `low`
+        by default), so a reasoning model can no longer burn its
+        whole turn budget on hidden reasoning and return empty
+        content. Do NOT demote, deprioritize, exclude, or bury such
+        a model as a last-resort rung because it "seems slow" or
+        "hangs" — that latency is reasoning-token burn the engine
+        now bounds, not an unreachable or broken binding. If the
+        inventory surfaces the id, it resolves; order rungs by the
+        operator's genuine preference and operational distinctness,
+        never by whether a model reasons.
+
+      - **Prefer the engine reasoning default over hardcoding
+        `reasoning_effort`.** Because the engine already applies the
+        `low` cap (above), normally leave `reasoning_effort` unset
+        and let the default govern. Emit an explicit value only when
+        a specific step should reason *more* than the default. Note
+        `medium` is a no-op (it means "send nothing / provider
+        default"), so the only value that actually tightens the cap
+        is `low`.
 
       - **No silent CoR** — if you propose a CoR fallback, name
         WHY in the rationale. "openai is the primary; google as

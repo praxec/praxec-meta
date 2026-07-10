@@ -1,15 +1,30 @@
 # capabilities/cap.verify.check-config.yaml
+#
+# Validate the operator's GATEWAY config via `praxec check`. Emit
+# ok=true when zero hard errors; surface the diagnostic list otherwise.
+#
+# IMPORTANT — this checks the whole gateway config, not an emitted
+# definition in isolation. `praxec check --config <file>` expects a
+# gateway config (`version` + `repos`/inline definitions); a bare
+# single-definition `workflows:` file has no parent context, so
+# cross-workflow rules (V12 use-bindings, V13/V14 slot tables,
+# V15/V16 contract-hash pins, connection references) can't be
+# evaluated against it standalone. Point this cap at the gateway
+# config whose `repos:` already loads the directory the new
+# definition was saved into.
 
 workflows:
   cap.verify.check-config:
     verb: verify
     lifecycle: experimental
     description: >
-      Validate a candidate YAML via `praxec check`. Emit ok=true
-      when zero hard errors; surface the diagnostic list otherwise.
+      Run `praxec check` against the operator's gateway config (the
+      one whose repos load the newly-authored definition). ok=true
+      when zero hard errors; diagnostics carry the error/warning
+      lines otherwise.
     snippet:
       inputs:
-        config_path: { type: string, required: true }
+        gateway_config_path: { type: string, required: true }
       outputs:
         ok:          { type: boolean }
         diagnostics: { type: array }
@@ -23,7 +38,10 @@ workflows:
             executor:
               kind: script
               subject: verify.praxec.check
+              args:
+                - "$.input.gateway_config_path"
+              treatNonZeroAsFailure: false
             output:
-              ok:          "$.output.ok"
-              diagnostics: "$.output.diagnostics"
+              ok:          "$.output.json.ok"
+              diagnostics: "$.output.json.diagnostics"
       done: { terminal: true }

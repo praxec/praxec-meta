@@ -1,0 +1,46 @@
+# capabilities/cap.refactor.repair-from-diagnostic.yaml
+#
+# Given the diagnostics from `praxec check` (or a gateway DEGRADED
+# HealthReport), edit the offending workflow file to clear the fault. An agent
+# step: the agent reads the diagnostics + config, makes the minimal edit via its
+# file tools (wired by the gateway — this is a governed write), and submits a
+# summary. The repair loop re-runs `praxec check` to accept or retry.
+
+workflows:
+  cap.refactor.repair-from-diagnostic:
+    verb: refactor
+    lifecycle: experimental
+    description: >
+      Repair a workflow/config fault from its `praxec check` diagnostics —
+      the smallest correct edit that clears the fault, preserving intended
+      behavior. Re-check is the acceptance gate.
+    snippet:
+      inputs:
+        diagnostics:         { type: array, required: true }
+        gateway_config_path: { type: string, required: true }
+      outputs:
+        summary:       { type: string }
+        files_changed: { type: array }
+    skills: [refactor.repair-workflow]
+    initialState: ready
+    states:
+      ready:
+        goal: >
+          Make the minimal edit that clears the diagnostics; cite the skill
+          recipe for the fault code. Do not claim success — the re-check
+          decides.
+        transitions:
+          submit_repair:
+            target: done
+            actor: agent
+            inputSchema:
+              type: object
+              required: [summary, files_changed]
+              properties:
+                summary:       { type: string }
+                files_changed: { type: array, items: { type: string } }
+            executor: { kind: noop }
+            output:
+              summary:       "$.arguments.summary"
+              files_changed: "$.arguments.files_changed"
+      done: { terminal: true }
