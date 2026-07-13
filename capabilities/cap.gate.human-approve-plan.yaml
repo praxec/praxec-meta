@@ -53,7 +53,7 @@ workflows:
             actor: deterministic
             guards:
               - kind: expr
-                expr: "$.input.mode == 'auto'"
+                expr: "$.workflow.input.mode == 'auto'"
             executor: { kind: noop }
             output:
               approved:   true
@@ -64,7 +64,7 @@ workflows:
             actor: human
             guards:
               - kind: expr
-                expr: "$.input.mode == 'review_plan'"
+                expr: "$.workflow.input.mode == 'review_plan'"
             inputSchema:
               type: object
               required: [approved, plan_final]
