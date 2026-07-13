@@ -57,7 +57,7 @@ workflows:
             executor: { kind: noop }
             output:
               approved:   true
-              plan_final: "$.input.plan"
+              plan_final: "$.workflow.input.plan"
               rationale:  "auto mode — no human review"
           approve:
             target: done
