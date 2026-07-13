@@ -36,7 +36,7 @@ workflows:
               kind: script
               subject: verify.auth-only-smoke-test
               args:
-                - "$.input.models_config_path"
+                - "$.workflow.input.models_config_path"
             output:
               results:    "$.output.json.results"
               disclaimer: "$.output.json.disclaimer"

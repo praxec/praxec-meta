@@ -45,7 +45,7 @@ workflows:
               kind: script
               subject: fetch.provider-model-inventory
               args:
-                - "$.input.providers"
+                - "$.workflow.input.providers"
             output:
               inventory: "$.output.json.inventory"
               errors:    "$.output.json.errors"

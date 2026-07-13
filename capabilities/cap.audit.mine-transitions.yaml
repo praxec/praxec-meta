@@ -33,8 +33,8 @@ workflows:
               # Positional args — the script executor does not inject
               # context slots as env vars; inputs must arrive via `args:`.
               args:
-                - "$.input.definition_id"
-                - "$.input.since"
+                - "$.workflow.input.definition_id"
+                - "$.workflow.input.since"
             output:
               report: "$.output.json"
       done: { terminal: true }
