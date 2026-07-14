@@ -41,8 +41,8 @@ workflows:
               kind: script
               subject: verify.capability-harness
               args:
-                - "$.input.models_config_path"
-                - "$.input.contract_path"
+                - "$.workflow.input.models_config_path"
+                - "$.workflow.input.contract_path"
             output:
               contract_id: "$.output.json.contract_id"
               affinity:    "$.output.json.affinity"

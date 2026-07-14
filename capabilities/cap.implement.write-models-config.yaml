@@ -66,7 +66,7 @@ workflows:
               subject: install.models-config
               args:
                 - "$.context.yaml_text"
-                - "$.input.target_path"
+                - "$.workflow.input.target_path"
               treatNonZeroAsFailure: false
             output:
               written_path:  "$.output.json.written_path"

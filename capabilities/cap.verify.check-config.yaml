@@ -39,7 +39,7 @@ workflows:
               kind: script
               subject: verify.praxec.check
               args:
-                - "$.input.gateway_config_path"
+                - "$.workflow.input.gateway_config_path"
               treatNonZeroAsFailure: false
             output:
               ok:          "$.output.json.ok"
