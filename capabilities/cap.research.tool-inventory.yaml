@@ -12,6 +12,7 @@ workflows:
       here had no way to enumerate the gateway and exhausted the step budget
       producing nothing, which made the whole authoring pack unusable.
     snippet:
+      inputs: {}
       outputs:
         inventory: { type: object }
     initialState: ready
