@@ -5,7 +5,16 @@
 #
 #   praxec check --config examples/praxec-meta-only.yaml
 
+# `_writableRepos` (praxec 0.0.21+) declares the repo(s) a run may operate on and
+# sources every run's ambient `$.run.repo_root`. On 0.0.22 a run cannot start
+# without at least one — even meta-authoring runs that edit config files. Point
+# `root` at the pack/config repo these meta flows author or repair.
 version: "1.0.0"
+
+praxec:
+  _writableRepos:
+    - root: "."
+      push: false
 
 repos:
   - path: ..
