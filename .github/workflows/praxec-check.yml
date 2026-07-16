@@ -19,7 +19,7 @@ permissions:
   contents: read
 
 env:
-  PRAXEC_VERSION: v0.0.23
+  PRAXEC_VERSION: v0.0.24
   CHECK_CONFIG: examples/praxec-meta-only.yaml
 
 jobs:
