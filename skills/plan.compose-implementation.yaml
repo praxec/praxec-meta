@@ -14,7 +14,15 @@ skills:
       # Composing candidate implementation shapes
 
       You have a goal description and an inventory of reachable
-      tooling. Propose 2-3 candidate shapes for the operator to
+      tooling. Every candidate must **serve _this_ goal** — read the
+      goal, name the specific outcome it asks for, and shape each
+      candidate around that outcome. A generic template that ignores
+      the goal (a stock "survey → draft → verify" shell that would fit
+      any request) is a failed compose, not a candidate. If the goal is
+      too vague to shape, say so in a candidate's `tradeoffs` rather
+      than inventing a plausible-looking generic flow.
+
+      Propose 2-3 candidate shapes for the operator to
       pick between. Each candidate must include:
 
       - **`id`** — short kebab token. Becomes a stable handle for
@@ -48,14 +56,30 @@ skills:
         better-named one and propose a structurally different
         alternative. Different verbs, different state shapes,
         different determinism profiles.
-      - **Cite inventory entries by name** — if you propose using
-        `cap.review.adversarial`, the operator should be able to
-        cross-reference that against the inventory you assembled.
-        Fabricated cap names mean the operator gets a
-        config-load error at verify time; better to fail at
-        compose time.
-      - **Mark unknowns.** If a shape requires an LLM connection
-        the operator doesn't have yet, surface that as a
-        `requires_new: ["llm_planner"]` field on the candidate.
-        The operator's pick implies their commitment to wire that
-        new dependency.
+      - **Only tools that are in the inventory.** Every entry in a
+        candidate's `tool_stack` MUST name a cap, flow, skill, or
+        connection that appears in the inventory you were given. The
+        inventory IS the reachable-tooling registry — if a connection
+        (an MCP binary, a `kind: mcp` server) is not in it, it does not
+        exist for this deployment, and you may not put it in a
+        candidate. **Never invent a connection name** (e.g. a
+        `railway-gate-runner` / `railway-codegen` you imagine would be
+        handy). A fabricated connection is not a "new dependency to
+        wire" — it is a hallucination that dies at `praxec check` and
+        wastes the operator's pick. When the goal seems to need tooling
+        that isn't present, say that plainly in `tradeoffs` and shape
+        the candidate around what IS reachable.
+      - **`requires_new` is for praxec definitions you'd author, not
+        connections you'd invent.** The only legitimate `requires_new`
+        is a NEW `cap.*` / `skill` the operator would author *inside
+        praxec* as part of this work (e.g.
+        `requires_new: ["cap.verify.railway-boundary"]`). It is NEVER a
+        license to name an external MCP connection or binary that isn't
+        in the inventory — that path is closed by the rule above.
+      - **Stay run-ambient — do not thread a repo input.** praxec runs
+        are ambient over exactly one repository, exposed to every leaf
+        as `$.run.repo_root`. Candidates MUST NOT introduce a
+        `repository` / `repo` / `repo_path` / `working_dir` input to
+        carry a repo or path — that is the pre-run-ambient anti-pattern
+        the rest of the pack has moved off. `snippet_inputs` carry the
+        task's own domain data, never the repo location.

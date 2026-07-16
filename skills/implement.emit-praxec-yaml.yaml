@@ -32,6 +32,15 @@ skills:
         - Orchestrators: `flow.<name>` (V7).
       - Every workflow must declare `initialState` and a `states:`
         map; the initial state must exist in the map.
+      - **Run-ambient — never author a repo input.** A praxec run is
+        ambient over exactly one repository, exposed to every leaf as
+        `$.run.repo_root`. Do NOT emit a `repository` / `repo` /
+        `repo_path` / `working_dir` input on any cap or flow to carry a
+        repo or path. A file-writing leaf roots itself with a
+        `file:{{ $.run.repo_root }}` connection template, and a
+        `workingDirectory` renders from `$.run.repo_root` — not from a
+        threaded input. Threading a repo input is the pre-run-ambient
+        anti-pattern; the emitted definition must not resurrect it.
 
       ### Capabilities (`cap.*`)
 
@@ -92,6 +101,15 @@ skills:
         `command:` (a string) and/or `url:` — NOT `type:` / `transport:`.
         `deny_unknown_fields` is on, so invented keys (e.g. `external:`)
         fail at load.
+      - **Only reference connections that exist.** A `connection:` named
+        by a `kind: mcp` executor must be one the deployment actually
+        declares (it was in the inventory the chosen shape cited). Do
+        NOT emit an executor pointing at a connection you invented at
+        emit time — an unresolved `connection:` fails at dispatch and
+        strands the flow. If the chosen shape needs a connection that
+        isn't declared, that is a compose-time gap the operator already
+        signed off on via `requires_new`; emit the executor only once
+        the connection is real.
 
       ### Authoring tiers
 
