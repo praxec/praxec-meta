@@ -30,7 +30,11 @@ workflows:
     initialState: ready
     states:
       ready:
-        goal: Attack the authored YAML; cite findings; emit verdict.
+        goal: >
+          Attack the authored YAML; emit verdict. A non-approval verdict MUST
+          carry at least one concrete finding (what is wrong, where, and what
+          would fix it) — a rejection with no findings is unactionable and
+          dead-ends the mission (live finding #3).
         transitions:
           submit_review:
             target: done
@@ -41,6 +45,14 @@ workflows:
               properties:
                 verdict:  { type: string, enum: [approved, needs-revision, rejected] }
                 findings: { type: array, default: [] }
+              # Finding #3: any non-approval must be actionable.
+              allOf:
+                - if:
+                    properties: { verdict: { enum: [needs-revision, rejected] } }
+                  then:
+                    required: [verdict, findings]
+                    properties:
+                      findings: { type: array, minItems: 1 }
             executor: { kind: noop }
             output:
               verdict:  "$.arguments.verdict"
