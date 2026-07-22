@@ -3,8 +3,12 @@
 # HITL gate over the suggested binding plan. Two modes:
 #
 #   - `auto`         — skip the human; plan_final = plan; approved = true.
-#   - `review_plan`  — block for the operator's decision; they may
-#                      approve, reject, or hand back an edited plan.
+#   - `review_plan`  — block for the operator's decision (approve or
+#                      reject). `plan_final` is always the presented
+#                      plan from context — the gate decides, it does
+#                      not edit (an elicitation form can only collect
+#                      primitives; hand-back-an-edited-plan was the
+#                      "Accept can never succeed" defect shape).
 #
 # `review_each` (per-binding approval) is explicitly deferred to
 # v0.3.1+ per the FMECA P4 split.
@@ -14,67 +18,70 @@ workflows:
     verb: gate
     lifecycle: experimental
     description: >
-      Decide whether to write the suggested models.yaml plan.
+      Decide whether to write the suggested agents.yaml plan.
       `auto` mode short-circuits with approved=true; `review_plan`
-      blocks until the operator submits an approval (with optional
-      edited plan) or a rejection. The chosen plan_final flows on
-      to the write cap.
+      blocks until the operator submits an approval or a rejection.
+      The chosen plan_final flows on to the write cap.
+    # Inputs are declared in BOTH homes, kept in sync: top-level `inputs:`
+    # synthesizes the inputSchema (so `mode`/`prompt` defaults are actually
+    # applied at start and every input is a statically-seeded `$.context`
+    # slot the mode guards may read — use-before-def, SPEC §11), while
+    # `snippet.inputs` carries the V30 caller-binding contract (V4 requires
+    # the key on a capability snippet).
+    inputs: &approve_plan_inputs
+      plan:        { type: object, required: true }
+      rationale:   { type: object, default: {} }
+      tradeoffs:   { type: array,  default: [] }
+      assumptions: { type: array,  default: [] }
+      mode:
+        type: string
+        enum: [auto, review_plan]
+        default: review_plan
+      prompt:
+        type: string
+        default: "Approve this agents.yaml plan?"
     snippet:
-      inputs:
-        plan:        { type: object, required: true }
-        rationale:   { type: object, default: {} }
-        tradeoffs:   { type: array,  default: [] }
-        assumptions: { type: array,  default: [] }
-        mode:
-          type: string
-          enum: [auto, review_plan]
-          default: review_plan
-        prompt:
-          type: string
-          default: "Approve this models.yaml plan, or hand back an edited version."
+      inputs: *approve_plan_inputs
       outputs:
         approved:   { type: boolean }
         plan_final: { type: object }
         rationale:  { type: string }
-    # V6 (SPEC §4.1): a `gate` capability's INITIAL state must carry the
-    # human/ask move. Both the auto short-circuit and the human approval
-    # therefore live in the initial state, guarded on `mode`, rather than
-    # routing through a second state first.
-    initialState: gating
+    initialState: awaiting_human
     states:
-      gating:
+      awaiting_human:
         goal: >
-          auto mode short-circuits with approved=true; review_plan
-          surfaces the plan + rationale + tradeoffs + assumptions to the
-          operator and waits for approve / edit / reject.
+          Surface the plan + rationale + tradeoffs + assumptions to
+          the operator; wait for approve / reject. In `auto` mode
+          the deterministic short-circuit fires before any human
+          parks.
         transitions:
           auto_approve:
             target: done
             actor: deterministic
             guards:
               - kind: expr
-                expr: "$.workflow.input.mode == 'auto'"
+                expr: "$.context.mode == 'auto'"
             executor: { kind: noop }
             output:
               approved:   true
-              plan_final: "$.workflow.input.plan"
+              plan_final: "$.context.plan"
               rationale:  "auto mode — no human review"
           approve:
             target: done
             actor: human
             guards:
               - kind: expr
-                expr: "$.workflow.input.mode == 'review_plan'"
+                expr: "$.context.mode == 'review_plan'"
+            presents: ["$.context.plan"]
             inputSchema:
               type: object
-              required: [approved, plan_final]
+              required: [approved]
               properties:
-                approved:   { type: boolean }
-                plan_final: { type: object }
-                rationale:  { type: string, default: "" }
+                approved:  { type: boolean }
+                rationale: { type: string, default: "" }
             executor: { kind: human }
             output:
               approved:   "$.arguments.approved"
-              plan_final: "$.arguments.plan_final"
+              plan_final: "$.context.plan"
               rationale:  "$.arguments.rationale"
       done: { terminal: true }
