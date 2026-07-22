@@ -92,3 +92,70 @@ should declare a `presentation` (or the elicitation should render the gate's
 declared context slice — e.g. `$.context.candidates`) so the decision payload
 reaches the human. A gate that transmits no context degrades to a rubber stamp,
 which silently converts HITL governance into noise.
+
+## Addendum 2: three authoring-loop defects (live findings #3–#5)
+
+Driving `meta/flow.author-flow` end-to-end (goal → survey → human pick →
+compose → emit → check → review) surfaced three defects in the loop itself:
+
+3. **Rejection with zero findings.** `meta/cap.review.adversarial` returned
+   `verdict: "rejected"` with `findings: null` (583K tokens reviewed, $0.26,
+   242s). The rejection was substantively RIGHT — the emitted flow invented
+   executor placement, definition references, and input contracts for nearly
+   every composed capability — but with no findings recorded the author has
+   nothing to fix and the mission dead-ends. The review contract must REQUIRE
+   ≥1 finding when the verdict is not `approved` (same discipline as
+   `cap.review.react-antipatterns`).
+
+4. **The check gate was vacuous.** `checking` reported `check_ok: true,
+   check_diagnostics: []` — but the emitted YAML was never written to its
+   `target_path` (`cognitive-max/workflows/…`), so `meta/cap.verify.check-config`
+   validated the UNCHANGED gateway. The "it must load" gate never loaded the
+   artifact. Emit must write the file into an include-reachable path (or a
+   temp include overlay) before check, and check should fail if the target
+   definition id is absent from the loaded set.
+
+5. **No repair loop.** `reviewed --rejected--> failed` discards the composed,
+   emitted work entirely. An authoring flow should route a rejection (with its
+   findings) back to `composing` with a bounded retry counter — the same
+   anneal discipline the flows it authors are expected to have.
+
+## Addendum 3: `scope.skills` on nested-cap states is inert (live finding #6)
+
+While authoring the corrected flow, the agent verified in praxec-kernel source
+that skills inject ONLY into agent leaves of the SAME definition — `scope:
+skills:` declared on a state whose transition dispatches a nested capability
+(the idiom `flow.ui.optimal` uses on `design_qa` to make FMECA enumeration
+JTBD-framed) never reaches the nested cap's agent at runtime. The shipped
+flagship flow believes its FMECA pass is lens-guided; it is not. Either the
+kernel should propagate scoped skills across `kind: workflow` dispatch, or
+the validator should WARN when `scope.skills` sits on a state with no
+same-definition agent leaf (it is silently dead config today).
+
+## Addendum 4: three run-time defects from driving flow.ux.optimize (findings #7–#9)
+
+7. **The 60s per-model-call cap makes large mandated emissions structurally
+   impossible** (engine + workflow). cap.plan.ux-matrix originally required ONE
+   agent emission of the full 56-deliverable graph (~10K tokens of strict JSON,
+   the grounded-surface object repeated in every cell). Every model call died at
+   `timeout after 60000 ms`; three models burned the 900s step budget in run 1.
+   Engine ask: a per-agent-leaf call-timeout override, and a validator heuristic
+   flagging agent-leaf output schemas that scale with input cardinality.
+   Workflow fix APPLIED: the agent grounds surfaces only; a deterministic script
+   (run.ux-matrix-expand, unit-tested) expands surfaces × principles — the graph
+   can no longer disagree with cell_count, and emission cost is O(surfaces).
+8. **Transient SQLite lock classified as permanent** (engine). Retry hit
+   `failed to start sub-workflow: database is locked` → `errorClass:
+   permanent_error`, transition REJECTED. SQLITE_BUSY is the canonical
+   transient error; it should retry with backoff. It also raced a double
+   config.reloaded emitted the same instant (reload storm on file-watch).
+9. **Wrong-repo-root failures are undiagnosable from the error** (engine).
+   Run 1 rooted at the wrong repo (auto-select; the target app was not a
+   registered writable repo). The agent's task was unsatisfiable from its
+   first file-read, but the terminal error (`AGENT_STEP_BUDGET_EXHAUSTED …
+   needs a human`) never mentions repo_root. Asks: include repo_root in
+   agent-failure payloads; emit a grounding-sanity signal (\"0/N input hints
+   matched repo contents\"); and fix the MCP schema gap where the
+   REPO_ROOT_AMBIGUOUS error prescribes a `repoRoot` selector the praxec.command
+   MCP surface does not accept (operator had to use a temporary single-writable
+   config window to bind the run).
