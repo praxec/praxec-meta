@@ -143,6 +143,11 @@ workflows:
             guards:
               - kind: expr
                 expr: "$.context.review_verdict == 'rejected'"
+          # praxec-check: out-of-domain review_verdict must not fall through to
+          # recovery links — route it to the explicit error state (unguarded default).
+          default:
+            target: failed
+            actor: deterministic
 
       opening_pr:
         transitions:
