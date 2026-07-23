@@ -1,0 +1,43 @@
+# capabilities/cap.install.emitted-definition.yaml
+#
+# Write the emitted definition YAML to its target pack path BEFORE the
+# check gate runs. Finding #4: without this step the authoring flows'
+# `checking` state validated a gateway that did not contain the new
+# artifact — the "it must load" gate was vacuous. The target path must
+# be include-reachable from the gateway config `praxec check` runs
+# against (the flows' `gateway_config_path` input documents this).
+
+workflows:
+  cap.install.emitted-definition:
+    verb: install
+    lifecycle: experimental
+    description: >
+      Atomic-write (temp + same-dir rename) the emitted definition YAML
+      to its target pack path so the subsequent check-config gate
+      validates a gateway that actually loads the new artifact.
+      write_ok=false lets the orchestrator branch to failed.
+    snippet:
+      inputs:
+        yaml_text:   { type: string, required: true }
+        target_path: { type: string, required: true }
+      outputs:
+        written_path: { type: string }
+        write_ok:     { type: boolean }
+    initialState: ready
+    states:
+      ready:
+        transitions:
+          write:
+            target: done
+            actor: deterministic
+            executor:
+              kind: script
+              subject: install.emitted-definition
+              args:
+                - "$.workflow.input.yaml_text"
+                - "$.workflow.input.target_path"
+              treatNonZeroAsFailure: false
+            output:
+              written_path: "$.output.json.written_path"
+              write_ok:     "$.output.json.write_ok"
+      done: { terminal: true }

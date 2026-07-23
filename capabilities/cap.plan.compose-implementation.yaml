@@ -6,18 +6,26 @@ workflows:
     lifecycle: experimental
     description: >
       From a goal + inventory, draft 2-3 candidate implementation
-      shapes with tradeoffs for the operator to pick between.
+      shapes with tradeoffs for the operator to pick between. When
+      review_findings is non-empty this is a repair round: address
+      every finding in the revised shapes.
     snippet:
       inputs:
         goal:      { type: string, required: true }
         inventory: { type: object, required: true }
+        # Empty on a first pass; carries the adversarial review's
+        # findings when an authoring flow loops back for repair.
+        review_findings: { type: array, default: [] }
       outputs:
         candidates: { type: array }
     skills: [plan.compose-implementation]
     initialState: ready
     states:
       ready:
-        goal: Propose 2-4 distinct shapes; cite tools from inventory.
+        goal: >
+          Propose 2-4 distinct shapes; cite tools from inventory. If
+          review_findings is non-empty, this is a repair round — each
+          revised shape must state how it addresses every finding.
         transitions:
           submit_candidates:
             target: done

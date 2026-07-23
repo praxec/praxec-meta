@@ -1,0 +1,58 @@
+# scripts-library/install.emitted-definition.yaml
+#
+# Atomic write of an emitted definition YAML to its target pack path.
+# Finding #4 (docs/DISCOVERABILITY-DOGFOODING-FINDING.md): the authoring
+# flows' check gate validated the UNCHANGED gateway because the emitted
+# YAML never reached disk. This script closes that gap — the artifact is
+# written BEFORE `praxec check` runs, so the gate actually loads it.
+#
+# Subject root is `install` (SPEC §22.4 blessed verb) — the work is
+# installing a definition file at a target path. No round-trip
+# validation here: `praxec check` is the very next gate and IS the
+# round-trip (it validates the whole gateway including the new file).
+#
+# Temp-file + same-directory rename keeps the on-disk file consistent
+# under crash (same discipline as install.models-config).
+#
+# Inputs (argv):
+#   $1 — YAML text to write (the emitted definition)
+#   $2 — target path on disk (include-reachable pack path)
+#
+# Output (stdout JSON):
+#   { "written_path": "<resolved-absolute-path>", "write_ok": true|false }
+#
+# Exit code: 0 on successful write; 1 otherwise. JSON is emitted on
+# BOTH paths so the wrapping cap can project write_ok and let the
+# orchestrator branch (treatNonZeroAsFailure: false).
+
+scripts:
+  install.emitted-definition:
+    verb: install
+    lifecycle: stable
+    source: praxec-meta
+    body: |
+      #!/usr/bin/env bash
+      set -uo pipefail
+      YAML_TEXT="${1:?missing YAML text}"
+      TARGET="${2:?missing target path}"
+
+      emit_fail() {
+        printf '{"written_path": "%s", "write_ok": false}\n' "$TARGET"
+        exit 1
+      }
+
+      TARGET_DIR=$(dirname "$TARGET")
+      mkdir -p "$TARGET_DIR" || emit_fail
+
+      # Resolve the absolute target so the JSON envelope is unambiguous.
+      ABS_TARGET=$(cd "$TARGET_DIR" && pwd)/$(basename "$TARGET") || emit_fail
+
+      # Atomic write: temp file in the SAME directory (cross-fs rename
+      # would not be atomic), then rename.
+      TMP=$(mktemp -p "$TARGET_DIR" .emitted.yaml.XXXXXX) || emit_fail
+      if printf '%s' "$YAML_TEXT" > "$TMP" && mv "$TMP" "$ABS_TARGET"; then
+        jq -n --arg path "$ABS_TARGET" '{written_path: $path, write_ok: true}'
+      else
+        rm -f "$TMP"
+        emit_fail
+      fi
