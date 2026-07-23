@@ -11,12 +11,22 @@ workflows:
       Author a new praxec flow (a workflow / orchestrator YAML). The canonical
       way to author a workflow in praxec — use this instead of hand-writing flow
       YAML. Survey reachable tooling → propose 2-3 flow shapes composing existing
-      caps → operator picks one → emit the workflow definition YAML →
-      check-config (it must load) → adversarial review → PR.
+      caps → operator picks one → emit the workflow definition YAML → write it
+      to its target pack path → check-config (the gate loads the new artifact) →
+      adversarial review, looping back to compose with the findings on
+      needs-revision/rejected (bounded) → PR.
     inputs:
       goal:      { type: string, required: true }
       namespace: { type: string, default: "draft" }
       base_ref:  { type: string, default: main }
+      # Bound on review-driven repair rounds before giving up (LoopGuard).
+      max_repair_rounds: { type: integer, default: 2 }
+      # Round counter — do not set; the loop increments it.
+      repair_round:      { type: integer, default: 0 }
+      # Review findings fed back into composing on a repair round — do
+      # not set; the reviewing state writes it (schema matches that
+      # writer — V14 slot-type unification).
+      review_findings:   { type: array }
       # Gateway config whose `repos:` load the directory the emitted
       # definition is saved into — `praxec check` needs the parent
       # context, not the bare emitted file. Defaults to the resolver's
@@ -49,8 +59,11 @@ workflows:
               definitionId: cap.plan.compose-implementation
               use:
                 inputs:
-                  goal:      "$.context.goal"
-                  inventory: "$.context.inventory"
+                  goal:            "$.context.goal"
+                  inventory:       "$.context.inventory"
+                  # Empty on the first pass; carries the adversarial
+                  # review's findings on a repair round (finding #5).
+                  review_findings: "$.context.review_findings"
                 outputs:
                   "$.context.candidates": candidates
 
@@ -73,7 +86,7 @@ workflows:
       emitting:
         transitions:
           emit:
-            target: checking
+            target: writing
             actor: deterministic
             executor:
               kind: workflow
@@ -89,6 +102,40 @@ workflows:
                 outputs:
                   "$.context.yaml_text":   yaml_text
                   "$.context.target_path": target_path
+
+      # finding #4: the emitted YAML must reach disk BEFORE the check
+      # gate runs — otherwise `praxec check` validates the UNCHANGED
+      # gateway and the "it must load" gate is vacuous.
+      writing:
+        transitions:
+          write:
+            target: written
+            actor: deterministic
+            executor:
+              kind: workflow
+              definitionId: cap.install.emitted-definition
+              use:
+                inputs:
+                  yaml_text:   "$.context.yaml_text"
+                  target_path: "$.context.target_path"
+                outputs:
+                  "$.context.written_path": written_path
+                  "$.context.write_ok":     write_ok
+
+      written:
+        transitions:
+          advance:
+            target: checking
+            actor: deterministic
+            guards:
+              - kind: expr
+                expr: "$.context.write_ok == true"
+          abort:
+            target: failed
+            actor: deterministic
+            guards:
+              - kind: expr
+                expr: "$.context.write_ok == false"
 
       checking:
         transitions:
@@ -143,12 +190,48 @@ workflows:
             guards:
               - kind: expr
                 expr: "$.context.review_verdict == 'approved'"
-          abort:
+          # finding #5: a non-approved verdict routes BACK to composing —
+          # with the review findings already in $.context.review_findings,
+          # which the compose transition feeds to the composer — instead
+          # of discarding the composed work. Bounded by repair_round
+          # (LoopGuard, same discipline as flow.repair-workflow-health).
+          repair_needs_revision:
+            target: composing
+            actor: deterministic
+            guards:
+              - kind: expr
+                expr: "$.context.review_verdict == 'needs-revision'"
+              - kind: expr
+                expr: "$.context.repair_round < $.context.max_repair_rounds"
+            output:
+              repair_round: { add: ["$.context.repair_round", 1] }
+          repair_rejected:
+            target: composing
+            actor: deterministic
+            guards:
+              - kind: expr
+                expr: "$.context.review_verdict == 'rejected'"
+              - kind: expr
+                expr: "$.context.repair_round < $.context.max_repair_rounds"
+            output:
+              repair_round: { add: ["$.context.repair_round", 1] }
+          # Repair budget exhausted -> explicit failure (never loop forever).
+          abort_needs_revision:
+            target: failed
+            actor: deterministic
+            guards:
+              - kind: expr
+                expr: "$.context.review_verdict == 'needs-revision'"
+              - kind: expr
+                expr: "$.context.repair_round >= $.context.max_repair_rounds"
+          abort_rejected:
             target: failed
             actor: deterministic
             guards:
               - kind: expr
                 expr: "$.context.review_verdict == 'rejected'"
+              - kind: expr
+                expr: "$.context.repair_round >= $.context.max_repair_rounds"
           # praxec-check: out-of-domain review_verdict must not fall through to
           # recovery links — route it to the explicit error state (unguarded default).
           default:

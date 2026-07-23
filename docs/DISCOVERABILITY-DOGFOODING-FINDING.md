@@ -92,3 +92,142 @@ should declare a `presentation` (or the elicitation should render the gate's
 declared context slice — e.g. `$.context.candidates`) so the decision payload
 reaches the human. A gate that transmits no context degrades to a rubber stamp,
 which silently converts HITL governance into noise.
+
+## Addendum 2: three authoring-loop defects (live findings #3–#5)
+
+Driving `meta/flow.author-flow` end-to-end (goal → survey → human pick →
+compose → emit → check → review) surfaced three defects in the loop itself:
+
+3. **Rejection with zero findings.** `meta/cap.review.adversarial` returned
+   `verdict: "rejected"` with `findings: null` (583K tokens reviewed, $0.26,
+   242s). The rejection was substantively RIGHT — the emitted flow invented
+   executor placement, definition references, and input contracts for nearly
+   every composed capability — but with no findings recorded the author has
+   nothing to fix and the mission dead-ends. The review contract must REQUIRE
+   ≥1 finding when the verdict is not `approved` (same discipline as
+   `cap.review.react-antipatterns`).
+
+4. **The check gate was vacuous.** `checking` reported `check_ok: true,
+   check_diagnostics: []` — but the emitted YAML was never written to its
+   `target_path` (`cognitive-max/workflows/…`), so `meta/cap.verify.check-config`
+   validated the UNCHANGED gateway. The "it must load" gate never loaded the
+   artifact. Emit must write the file into an include-reachable path (or a
+   temp include overlay) before check, and check should fail if the target
+   definition id is absent from the loaded set.
+
+5. **No repair loop.** `reviewed --rejected--> failed` discards the composed,
+   emitted work entirely. An authoring flow should route a rejection (with its
+   findings) back to `composing` with a bounded retry counter — the same
+   anneal discipline the flows it authors are expected to have.
+
+## Addendum 3: `scope.skills` on nested-cap states is inert (live finding #6)
+
+While authoring the corrected flow, the agent verified in praxec-kernel source
+that skills inject ONLY into agent leaves of the SAME definition — `scope:
+skills:` declared on a state whose transition dispatches a nested capability
+(the idiom `flow.ui.optimal` uses on `design_qa` to make FMECA enumeration
+JTBD-framed) never reaches the nested cap's agent at runtime. The shipped
+flagship flow believes its FMECA pass is lens-guided; it is not. Either the
+kernel should propagate scoped skills across `kind: workflow` dispatch, or
+the validator should WARN when `scope.skills` sits on a state with no
+same-definition agent leaf (it is silently dead config today).
+
+## Addendum 4: three run-time defects from driving flow.ux.optimize (findings #7–#9)
+
+7. **The 60s per-model-call cap makes large mandated emissions structurally
+   impossible** (engine + workflow). cap.plan.ux-matrix originally required ONE
+   agent emission of the full 56-deliverable graph (~10K tokens of strict JSON,
+   the grounded-surface object repeated in every cell). Every model call died at
+   `timeout after 60000 ms`; three models burned the 900s step budget in run 1.
+   Engine ask: a per-agent-leaf call-timeout override, and a validator heuristic
+   flagging agent-leaf output schemas that scale with input cardinality.
+   Workflow fix APPLIED: the agent grounds surfaces only; a deterministic script
+   (run.ux-matrix-expand, unit-tested) expands surfaces × principles — the graph
+   can no longer disagree with cell_count, and emission cost is O(surfaces).
+8. **Transient SQLite lock classified as permanent** (engine). Retry hit
+   `failed to start sub-workflow: database is locked` → `errorClass:
+   permanent_error`, transition REJECTED. SQLITE_BUSY is the canonical
+   transient error; it should retry with backoff. It also raced a double
+   config.reloaded emitted the same instant (reload storm on file-watch).
+9. **Wrong-repo-root failures are undiagnosable from the error** (engine).
+   Run 1 rooted at the wrong repo (auto-select; the target app was not a
+   registered writable repo). The agent's task was unsatisfiable from its
+   first file-read, but the terminal error (`AGENT_STEP_BUDGET_EXHAUSTED …
+   needs a human`) never mentions repo_root. Asks: include repo_root in
+   agent-failure payloads; emit a grounding-sanity signal (\"0/N input hints
+   matched repo contents\"); and fix the MCP schema gap where the
+   REPO_ROOT_AMBIGUOUS error prescribes a `repoRoot` selector the praxec.command
+   MCP surface does not accept (operator had to use a temporary single-writable
+   config window to bind the run).
+
+## Addendum 5: orchestrator decision-rig dies permanently on a stray model tool call (live finding #10)
+
+10. **Orchestrator decision-rig dies permanently on a stray model tool call**
+    (engine). `praxec orchestrate` (v0.0.28) driving
+    `wf_de8c3c36b80b405ba445eac5cff9907a` with
+    `openrouter:deepseek/deepseek-v4-pro` successfully drove 6 agent
+    transitions — then the decision model emitted a tool call and the rig
+    exited with `Error: … permanent error: RIG_TOOLS_UNSUPPORTED: model
+    called a tool but no ToolHost is wired.` A headless mission driver
+    should treat a stray tool call as a recoverable protocol violation
+    (strip tools from the request / reject the call and re-prompt), not a
+    permanent error that kills a multi-hour mission. The operator
+    workaround today is an external restart-supervisor loop (store-state
+    resume makes restarts cheap), which is exactly the babysitting the rig
+    exists to eliminate. Asks: (a) the rig strips/declines tool calls with
+    a corrective system nudge and retries N times before giving up;
+    (b) classify `RIG_TOOLS_UNSUPPORTED` as transient, not permanent.
+
+## Addendum 6: a gateway restart orphans in-flight auto-driven missions — no chain-resume verb (live finding #11)
+
+11. **A gateway restart orphans in-flight auto-driven missions: no chain-resume
+    verb** (engine, praxec v0.0.28). The gateway restart at 2026-07-23T00:43Z
+    left run `wf_de8c3c36b80b405ba445eac5cff9907a` alive in the store (status
+    `running`, state `analyzing_cognitive_load`, version 21) but permanently
+    stalled. Kernel inspection
+    (`crates/praxec-core/src/runtime/runtime_chain.rs`
+    `run_deterministic_chain`, called only from `runtime.rs` `start` and the
+    `runtime_submit.rs` submit path) shows the chain — which is what carries
+    Mode-B auto-drive of `actor: agent` states — is only entered from `start`
+    and `submit`. A run parked mid-chain at an agent state has exactly one
+    legal link (the agent transition itself), so the ONLY way to re-engage
+    auto-drive is for the external caller to hand-fulfill that agent step's
+    full output contract — defeating Mode-B — and `praxec orchestrate` cannot
+    do it either (finding #10: no ToolHost). Live workaround used: an external
+    agent produced the pending cell's findings per the skill contract and
+    submitted them via `praxec command`, whose in-process chain then resumed
+    auto-drive. Asks: (a) a `resume`/`drive` intent on praxec.command (or an
+    auto-resume scan at gateway startup) that re-enters the chain for runs
+    whose state has auto-drivable agent transitions; (b) surface such orphaned
+    runs in `praxec health` / `inspect` as "stalled: needs re-drive" instead
+    of an indistinguishable "running".
+
+## Addendum 7: auto-drive's step budget is unconfigurable — `auto_drive_max_seconds` is dead weight beyond the 900s default (live finding #12)
+
+12. **Auto-drive's step budget is unconfigurable: `auto_drive_max_seconds` is
+    dead weight beyond the 900s default** (engine, praxec v0.0.28, driving
+    `wf_de8c3c36b80b405ba445eac5cff9907a`). The `analyzing_nielsen` agent leaf
+    (a 41-file surface analysis) failed with `agent step budget exhausted
+    mid-chain-walk; surfacing instead of escalating models_tried=2
+    budget_seconds=900` — the first model
+    (`openrouter:deepseek/deepseek-v4-pro`) timed out at 762s, leaving <140s
+    for the escalation rung. Kernel analysis (praxec-kernel origin/main):
+    `crates/praxec-agents/src/executor.rs` clamps every attempt's wall to the
+    remaining `step_budget_seconds` (default `DEFAULT_STEP_BUDGET_SECONDS =
+    900`, config.rs exposes it per-step), but
+    `crates/praxec-core/src/runtime/runtime_chain.rs` synthesizes the
+    auto-drive agent config with ONLY `"max_seconds":
+    self.auto_drive_max_seconds` — it never sets `step_budget_seconds`, and no
+    gateway key or per-state YAML override reaches it on the auto-drive path.
+    Consequence: the operator raised `auto_drive_max_seconds: 600→1800`
+    precisely so "real code deliverables get room" (the config comment), but
+    the effective ceiling for any auto-driven leaf remains min(1800, 900) =
+    900s — the raise is silently inert, and any leaf whose honest work exceeds
+    900s can NEVER complete under auto-drive; the operator must hand-fulfill
+    the agent step externally (compounding finding #11's no-resume-verb).
+    Asks: (a) plumb a gateway-level
+    `praxec.agents.auto_drive_step_budget_seconds` (and/or honor a per-state
+    `step_budget_seconds` like `reasoning_effort` already is) into the
+    synthesized auto-drive config; (b) when `auto_drive_max_seconds` exceeds
+    the effective step budget, warn at config load rather than letting the
+    larger knob silently bind nothing.
