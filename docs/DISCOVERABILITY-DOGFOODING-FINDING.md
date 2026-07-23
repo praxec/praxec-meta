@@ -264,3 +264,44 @@ same-definition agent leaf (it is silently dead config today).
     documented operator intent; (3) `praxec doctor`/config-load should flag
     `repos:` paths under known-ephemeral locations (`.claude/worktrees/`) as
     future dangling risks.
+
+## Addendum 9: SPEC §8.3 frozen snapshots turn any definition bug into a permanently wedged mission — no refresh/migrate verb (live finding #14)
+
+14. **SPEC §8.3 frozen definition snapshots turn any definition bug into a
+    permanently wedged mission: no refresh/migrate verb** (engine, praxec
+    v0.0.28, run `wf_de8c3c36b80b405ba445eac5cff9907a`,
+    `cognitive-max/flow.ux.optimize`). After the run completed all 56 planned
+    deliverables, its `acquiring` state's exhaustion path failed permanently:
+    `cognitive/cap.coordinate.acquire-cohort` declared `spec: {type: object}` /
+    `deliverable_id: {type: string}` non-nullable while its own mcp-map
+    comment promised "When exhausted these coalesce to null" — so the FIRST
+    run ever to exhaust a full plan died with `EXECUTOR_FAILED ...
+    deliverable_id: null is not of type "string"` at the exact moment it
+    should have routed `exhausted → verifying`. The cap was fixed on disk
+    within minutes (nullable types, the established idiom from sibling
+    `cap.coordinate.cpm-acquire-indexed`; cognitive-architectures PR #45) and
+    the CHILD started passing (the error message shifted from the child's own
+    contract to the parent-side check) — but the PARENT kept failing
+    identically, because `dispatch_once` resolves "the definition from the
+    instance's carried snapshot, never from the live DefinitionStore (SPEC
+    §8.3)" (`runtime_submit.rs`), and that snapshot embeds the child contract
+    as `_snippetOutputs` (`config.rs` `expand_use_bindings`) at parent-start
+    time. Consequence: a mission that spent hours and real LLM cost analyzing
+    56 work items was unrecoverable through ANY public surface — no transition
+    could ever pass, no refresh verb exists, and cancel+restart would discard
+    all accumulated work. Live workaround (operator-approved): stop drivers,
+    back up the sqlite store, and surgically patch the frozen
+    `_snippetOutputs` types inside the one workflows-table instance row
+    (verified: version untouched at 283, one embed patched), then resume — it
+    worked, but hand-editing engine state should never be the recovery path.
+    Asks: (1) a governed `praxec command {intent: "refresh-definition",
+    workflowId, scope: "executor-embeds" | "full"}` that re-derives frozen
+    embeds (like `_snippetOutputs`) from the live config with an audit event
+    recording the diff — snapshot determinism matters for replay, but an
+    explicit operator-invoked, audited refresh is strictly better than sqlite
+    surgery; (2) output-contract validation at CHECK time should flag executor
+    maps that can produce null into non-nullable declared outputs (the map
+    comment even said so) — this class is statically detectable; (3) when a
+    sub-workflow output fails the parent-side snippet check, the error should
+    say WHICH copy of the contract it validated against (frozen vs live) —
+    the identical message across both phases cost real diagnosis time.
