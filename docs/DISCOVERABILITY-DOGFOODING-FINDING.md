@@ -159,3 +159,21 @@ same-definition agent leaf (it is silently dead config today).
    REPO_ROOT_AMBIGUOUS error prescribes a `repoRoot` selector the praxec.command
    MCP surface does not accept (operator had to use a temporary single-writable
    config window to bind the run).
+
+## Addendum 5: orchestrator decision-rig dies permanently on a stray model tool call (live finding #10)
+
+10. **Orchestrator decision-rig dies permanently on a stray model tool call**
+    (engine). `praxec orchestrate` (v0.0.28) driving
+    `wf_de8c3c36b80b405ba445eac5cff9907a` with
+    `openrouter:deepseek/deepseek-v4-pro` successfully drove 6 agent
+    transitions — then the decision model emitted a tool call and the rig
+    exited with `Error: … permanent error: RIG_TOOLS_UNSUPPORTED: model
+    called a tool but no ToolHost is wired.` A headless mission driver
+    should treat a stray tool call as a recoverable protocol violation
+    (strip tools from the request / reject the call and re-prompt), not a
+    permanent error that kills a multi-hour mission. The operator
+    workaround today is an external restart-supervisor loop (store-state
+    resume makes restarts cheap), which is exactly the babysitting the rig
+    exists to eliminate. Asks: (a) the rig strips/declines tool calls with
+    a corrective system nudge and retries N times before giving up;
+    (b) classify `RIG_TOOLS_UNSUPPORTED` as transient, not permanent.
