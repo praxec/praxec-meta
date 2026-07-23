@@ -231,3 +231,36 @@ same-definition agent leaf (it is silently dead config today).
     synthesized auto-drive config; (b) when `auto_drive_max_seconds` exceeds
     the effective step budget, warn at config load rather than letting the
     larger knob silently bind nothing.
+
+## Addendum 8: a single invalid `repos:` entry hard-fails EVERY config load (live finding #13)
+
+13. **A single invalid `repos:` entry hard-fails EVERY config load, killing
+    unrelated in-flight work across operator sessions** (engine, praxec
+    v0.0.28, 2026-07-23). While session A's mission supervision loop (driving
+    `wf_de8c3c36b80b405ba445eac5cff9907a` via repeated `praxec query`/`praxec
+    command`) was mid-flight at 45/56 work items, a concurrent session B
+    registered a new `repos:` entry
+    (`/home/mc/working/simuli/.claude/worktrees/agent-ab79e79de020227ff`, an
+    agent worktree) whose comment explicitly assumed "Loads ZERO definitions
+    (no praxec.repo.yaml) — eligible repo root only". The 0.0.28 loader
+    requires a manifest on every entry, so from that moment EVERY praxec CLI
+    invocation in every session failed at config load (`reading repo manifest
+    .../praxec.repo.yaml: No such file or directory`) — session A's supervisor
+    died even though its mission never referenced the new repo. Two
+    aggravators: (a) the same trap was already hit registering allumata-saas
+    earlier the same day, and the config carries a 2026-07-20 comment
+    documenting a prior instance (the reaped wt-railway-fix worktree
+    hard-failing loads, "praxec DEGRADED"); operators keep re-learning it
+    because nothing validates at registration time. (b) Agent worktrees are
+    ephemeral by design — a `repos:` entry pointing into `.claude/worktrees/`
+    WILL eventually dangle, reproducing this. Live workaround: plant a stub
+    `praxec.repo.yaml` (schema `praxec.repo/v1`, loads zero definitions,
+    git-excluded) in the target. Asks: (1) scope the failure — a repo entry
+    that fails to load should degrade THAT entry (warn + mark ineligible as
+    repo root) instead of failing the whole config, mirroring how
+    `MCP_TOOLS_UNREACHABLE` already degrades per-connection; (2) support
+    manifest-less registration for target-only roots (e.g. `manifest: none` /
+    `role: target`), since "eligible repo root, loads nothing" is a common,
+    documented operator intent; (3) `praxec doctor`/config-load should flag
+    `repos:` paths under known-ephemeral locations (`.claude/worktrees/`) as
+    future dangling risks.
