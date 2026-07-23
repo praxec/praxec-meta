@@ -231,3 +231,201 @@ same-definition agent leaf (it is silently dead config today).
     synthesized auto-drive config; (b) when `auto_drive_max_seconds` exceeds
     the effective step budget, warn at config load rather than letting the
     larger knob silently bind nothing.
+
+## Addendum 8: a single invalid `repos:` entry hard-fails EVERY config load (live finding #13)
+
+13. **A single invalid `repos:` entry hard-fails EVERY config load, killing
+    unrelated in-flight work across operator sessions** (engine, praxec
+    v0.0.28, 2026-07-23). While session A's mission supervision loop (driving
+    `wf_de8c3c36b80b405ba445eac5cff9907a` via repeated `praxec query`/`praxec
+    command`) was mid-flight at 45/56 work items, a concurrent session B
+    registered a new `repos:` entry
+    (`/home/mc/working/simuli/.claude/worktrees/agent-ab79e79de020227ff`, an
+    agent worktree) whose comment explicitly assumed "Loads ZERO definitions
+    (no praxec.repo.yaml) — eligible repo root only". The 0.0.28 loader
+    requires a manifest on every entry, so from that moment EVERY praxec CLI
+    invocation in every session failed at config load (`reading repo manifest
+    .../praxec.repo.yaml: No such file or directory`) — session A's supervisor
+    died even though its mission never referenced the new repo. Two
+    aggravators: (a) the same trap was already hit registering allumata-saas
+    earlier the same day, and the config carries a 2026-07-20 comment
+    documenting a prior instance (the reaped wt-railway-fix worktree
+    hard-failing loads, "praxec DEGRADED"); operators keep re-learning it
+    because nothing validates at registration time. (b) Agent worktrees are
+    ephemeral by design — a `repos:` entry pointing into `.claude/worktrees/`
+    WILL eventually dangle, reproducing this. Live workaround: plant a stub
+    `praxec.repo.yaml` (schema `praxec.repo/v1`, loads zero definitions,
+    git-excluded) in the target. Asks: (1) scope the failure — a repo entry
+    that fails to load should degrade THAT entry (warn + mark ineligible as
+    repo root) instead of failing the whole config, mirroring how
+    `MCP_TOOLS_UNREACHABLE` already degrades per-connection; (2) support
+    manifest-less registration for target-only roots (e.g. `manifest: none` /
+    `role: target`), since "eligible repo root, loads nothing" is a common,
+    documented operator intent; (3) `praxec doctor`/config-load should flag
+    `repos:` paths under known-ephemeral locations (`.claude/worktrees/`) as
+    future dangling risks.
+
+## Addendum 9: SPEC §8.3 frozen snapshots turn any definition bug into a permanently wedged mission — no refresh/migrate verb (live finding #14)
+
+14. **SPEC §8.3 frozen definition snapshots turn any definition bug into a
+    permanently wedged mission: no refresh/migrate verb** (engine, praxec
+    v0.0.28, run `wf_de8c3c36b80b405ba445eac5cff9907a`,
+    `cognitive-max/flow.ux.optimize`). After the run completed all 56 planned
+    deliverables, its `acquiring` state's exhaustion path failed permanently:
+    `cognitive/cap.coordinate.acquire-cohort` declared `spec: {type: object}` /
+    `deliverable_id: {type: string}` non-nullable while its own mcp-map
+    comment promised "When exhausted these coalesce to null" — so the FIRST
+    run ever to exhaust a full plan died with `EXECUTOR_FAILED ...
+    deliverable_id: null is not of type "string"` at the exact moment it
+    should have routed `exhausted → verifying`. The cap was fixed on disk
+    within minutes (nullable types, the established idiom from sibling
+    `cap.coordinate.cpm-acquire-indexed`; cognitive-architectures PR #45) and
+    the CHILD started passing (the error message shifted from the child's own
+    contract to the parent-side check) — but the PARENT kept failing
+    identically, because `dispatch_once` resolves "the definition from the
+    instance's carried snapshot, never from the live DefinitionStore (SPEC
+    §8.3)" (`runtime_submit.rs`), and that snapshot embeds the child contract
+    as `_snippetOutputs` (`config.rs` `expand_use_bindings`) at parent-start
+    time. Consequence: a mission that spent hours and real LLM cost analyzing
+    56 work items was unrecoverable through ANY public surface — no transition
+    could ever pass, no refresh verb exists, and cancel+restart would discard
+    all accumulated work. Live workaround (operator-approved): stop drivers,
+    back up the sqlite store, and surgically patch the frozen
+    `_snippetOutputs` types inside the one workflows-table instance row
+    (verified: version untouched at 283, one embed patched), then resume — it
+    worked, but hand-editing engine state should never be the recovery path.
+    Asks: (1) a governed `praxec command {intent: "refresh-definition",
+    workflowId, scope: "executor-embeds" | "full"}` that re-derives frozen
+    embeds (like `_snippetOutputs`) from the live config with an audit event
+    recording the diff — snapshot determinism matters for replay, but an
+    explicit operator-invoked, audited refresh is strictly better than sqlite
+    surgery; (2) output-contract validation at CHECK time should flag executor
+    maps that can produce null into non-nullable declared outputs (the map
+    comment even said so) — this class is statically detectable; (3) when a
+    sub-workflow output fails the parent-side snippet check, the error should
+    say WHICH copy of the contract it validated against (frozen vs live) —
+    the identical message across both phases cost real diagnosis time.
+
+## Addendum 10: script executor passes bound payloads via argv — blackboard values over ~128KiB make the script unspawnable, and each failed child start leaves an orphan (live finding #15)
+
+15. **Script executor passes bound payloads via argv: any blackboard value
+    over ~128KiB (Linux MAX_ARG_STRLEN) makes the script unspawnable — and
+    each failed child start leaves an orphaned instance** (engine, praxec
+    v0.0.28, run `wf_de8c3c36b80b405ba445eac5cff9907a`). The flow's fan-in
+    accumulated 56 cells of findings into a 389,237-byte blackboard string
+    (the `concat` operator is praxec's ONLY declarative array accumulation,
+    so large strings are the designed outcome of any real fan-in). The
+    falsification cap's initial state binds it as a script arg (`args:
+    ["$.workflow.input.raw_findings"]`); the script executor
+    (`crates/praxec-executors/src/script.rs`) writes only the BODY to a
+    tempfile and passes all bound args via argv with no stdin or file-passing
+    mechanism — so spawn fails with `connection error: script spawn failed
+    (/tmp/...): Argument list too long (os error 7)` and the cap can NEVER
+    start once the log outgrows one page of findings. Compounding: each of
+    the ~25 supervisor-driven verify submits spawned a child that died at the
+    same spawn, leaving 30 orphaned `cap.verify.ux-surface-findings`
+    instances at `normalizing` v0 in the store (verified by direct store
+    inspection) — failed child starts are never reaped. Live workaround
+    (temporary, uncommitted working-tree shim): exported the blackboard value
+    to a file, added an `@file` sentinel to the normalize/partition scripts
+    routing to it, and passed the sentinel instead of the value — the child
+    then started and normalized all 168 deduped candidates. Asks: (1) script
+    executor support for large args — either automatic (any rendered arg
+    over a threshold is written to a tempfile and the path substituted, with
+    an env var or naming convention telling the script) or declarative
+    (`args_via: file|stdin`); (2) `praxec check` should warn when a script
+    arg binds a slot that a `concat` accumulator writes (statically
+    detectable unbounded-growth-into-argv); (3) reap or mark orphaned
+    children whose start failed before the first transition — 30 identical
+    corpses from one wedge distort every store scan and `praxec inspect`.
+
+## Addendum 11: the authoring loop invents external-API contracts and nothing between `check` and production catches it (live finding #16)
+
+16. **A flow's measurement script was authored against an invented external
+    API contract and passed every gate praxec has — the invention only
+    surfaced when the stage finally executed, 30+ hops into a mission**
+    (authoring loop + lifecycle gap; `cognitive-max/run.preveti.ux-study`,
+    run `wf_de8c3c36b80b405ba445eac5cff9907a`). The script hardcoded an
+    endpoint whose request body belongs to a different surface entirely
+    (`/v1/intel/grounded` wants a scenario/intel body → `422 missing
+    scenario_title` on a study request), read the submit response as
+    `{job_id}` where the correct surface returns `{id}`, polled a route the
+    correct surface doesn't use, and matched a status vocabulary
+    (`succeeded/partial`) the provider provably never emits (the provider
+    pins `pending|running|complete|failed|cancelled` in its own
+    status-contract tests). Every element was plausible; none was real —
+    the same invented-contracts failure class as findings #3–#5, now in a
+    SCRIPT body where `praxec check` validates only YAML shape and verb
+    legality. The stage failed only at remeasure time, deep inside a live
+    mission, as `permanent error: script ... exited with code Some(1)` with
+    the script's structured `{failed_stage, error}` stdout DISCARDED (the
+    audit trail records only the exit code — the diagnosis had to be
+    recovered by re-running the script by hand). Asks: (1) capture and
+    audit-log a failed script's stdout/stderr tail — the executor had the
+    exact failure stage in hand and threw it away; (2) lifecycle teeth:
+    `experimental` scripts that call external APIs should carry a recorded
+    live proof (a `script_acks`-style attestation from one real execution)
+    before a flow may bind them in a non-experimental mission; (3) the
+    authoring skill should require grounding external contracts in provider
+    source/OpenAPI, not memory — the provider's OpenAPI was served locally
+    at `/v1/docs` the whole time.
+
+## Addendum 12: anneal rounds ≥2 are vacuous — `next_round` reuses the spent CPM cohort, so the convergence gate proves an empty set, not a fixed point (live finding #17)
+
+17. **The anneal's loop-back re-enters cohort acquisition with the SAME
+    plan_id whose deliverables round 1 already completed — acquisition
+    exhausts instantly, the cell gate routes straight to fan-in, and the
+    verify stage normalizes an EMPTY findings log: `above_bar_count == 0`
+    by vacuity, and the "converged" edge fires as if the fixed point were
+    proven** (flow authoring, `cognitive-max/flow.ux.optimize` +
+    `cognitive/cap.coordinate.cpm-plan`, run
+    `wf_de8c3c36b80b405ba445eac5cff9907a`, audit-verified: `next_round` →
+    `schedule` (plan reused, `fetch_schedule` returned the spent schedule)
+    → `acquire` (exhausted, null deliverable) → `fan_in` → `verifying`, all
+    within ONE second at v289→294). The design comment promises "same
+    matrix, fresh plan, patched code; the fan-in log resets" — the log
+    resets, the plan does not, so every round after the first measures
+    nothing and the anneal's central claim (converged == a fresh
+    re-analysis found zero above-bar findings) is unsound. Downstream the
+    0-candidate falsifying agent step then wedges on AGENT_NO_RESULT —
+    models cannot conform to "submit one observation per candidate" over
+    zero candidates. Fixes: (1) round-scope the plan key (plan_id must
+    incorporate the round counter so `cpm-plan` mints a fresh 56-cell
+    cohort per round); (2) the cell gate's exhausted-edge should
+    distinguish "exhausted because this round analyzed everything" from
+    "exhausted on arrival having analyzed nothing" — the latter is a wiring
+    bug and should halt loudly, not converge silently; (3) same class,
+    adjacent: the falsify and implement stages hand ONE agent step the
+    whole candidate/plan set (168 candidates; a 37-finding hardened plan) —
+    with #12's fixed 900s budget those stages exhaust or silently
+    under-deliver (implement shipped 2 of 37 findings and self-reported
+    success); bounded-batch sharding needs to be the authored pattern for
+    any per-item agent stage.
+
+## Addendum 13: the sub-workflow reuse record is written only on SUSPEND — a parent whose submit ERRORS mid-dispatch can never harvest its completed child (live finding #18)
+
+18. **`_subworkflow_wait` (the parent-context record that lets a re-driven
+    transition reuse an in-flight child instead of spawning a fresh one) is
+    only persisted when the parent cleanly suspends into waiting — when the
+    child's start/auto-drive path ERRORS the parent's submit is rejected
+    wholesale, no record is written, and a child that later completes (or
+    is completed externally) is unreachable: every re-submit spawns a NEW
+    child from scratch** (engine, praxec v0.0.28, run
+    `wf_de8c3c36b80b405ba445eac5cff9907a` + child
+    `wf_b18af70533324f2bb966d315469b4e83`). Sequence: verify → child
+    spawned → child's falsifying agent step exhausted its chain (#12/#15
+    conditions) → error propagated → parent submit REJECTED at `verifying`
+    with no wait record — while the child persisted at `falsifying` v1,
+    was fulfilled externally (the 168 observations submitted by hand), and
+    completed with the full partition (145 verified / 37 above-bar). The
+    engine's own re-drive logic ("re-check the recorded child once … it
+    may already be terminal — advance") does exactly the right thing — but
+    only if the record exists, and nothing on the error path writes it.
+    Recovery required direct store surgery: planting the two-field record
+    in the parent row, after which the very next `verify` submit harvested
+    the child and chained cleanly through the convergence gate. Ask: write
+    the child binding at SPAWN (the moment the child id exists), not at
+    suspend — the reuse check is already keyed by transition name, so an
+    errored dispatch becomes recoverable for free, and externally-rescued
+    children (the #11/#12 world we actually operate in) stop being
+    unreachable orphans.
