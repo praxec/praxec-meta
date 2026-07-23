@@ -338,3 +338,94 @@ same-definition agent leaf (it is silently dead config today).
     detectable unbounded-growth-into-argv); (3) reap or mark orphaned
     children whose start failed before the first transition — 30 identical
     corpses from one wedge distort every store scan and `praxec inspect`.
+
+## Addendum 11: the authoring loop invents external-API contracts and nothing between `check` and production catches it (live finding #16)
+
+16. **A flow's measurement script was authored against an invented external
+    API contract and passed every gate praxec has — the invention only
+    surfaced when the stage finally executed, 30+ hops into a mission**
+    (authoring loop + lifecycle gap; `cognitive-max/run.preveti.ux-study`,
+    run `wf_de8c3c36b80b405ba445eac5cff9907a`). The script hardcoded an
+    endpoint whose request body belongs to a different surface entirely
+    (`/v1/intel/grounded` wants a scenario/intel body → `422 missing
+    scenario_title` on a study request), read the submit response as
+    `{job_id}` where the correct surface returns `{id}`, polled a route the
+    correct surface doesn't use, and matched a status vocabulary
+    (`succeeded/partial`) the provider provably never emits (the provider
+    pins `pending|running|complete|failed|cancelled` in its own
+    status-contract tests). Every element was plausible; none was real —
+    the same invented-contracts failure class as findings #3–#5, now in a
+    SCRIPT body where `praxec check` validates only YAML shape and verb
+    legality. The stage failed only at remeasure time, deep inside a live
+    mission, as `permanent error: script ... exited with code Some(1)` with
+    the script's structured `{failed_stage, error}` stdout DISCARDED (the
+    audit trail records only the exit code — the diagnosis had to be
+    recovered by re-running the script by hand). Asks: (1) capture and
+    audit-log a failed script's stdout/stderr tail — the executor had the
+    exact failure stage in hand and threw it away; (2) lifecycle teeth:
+    `experimental` scripts that call external APIs should carry a recorded
+    live proof (a `script_acks`-style attestation from one real execution)
+    before a flow may bind them in a non-experimental mission; (3) the
+    authoring skill should require grounding external contracts in provider
+    source/OpenAPI, not memory — the provider's OpenAPI was served locally
+    at `/v1/docs` the whole time.
+
+## Addendum 12: anneal rounds ≥2 are vacuous — `next_round` reuses the spent CPM cohort, so the convergence gate proves an empty set, not a fixed point (live finding #17)
+
+17. **The anneal's loop-back re-enters cohort acquisition with the SAME
+    plan_id whose deliverables round 1 already completed — acquisition
+    exhausts instantly, the cell gate routes straight to fan-in, and the
+    verify stage normalizes an EMPTY findings log: `above_bar_count == 0`
+    by vacuity, and the "converged" edge fires as if the fixed point were
+    proven** (flow authoring, `cognitive-max/flow.ux.optimize` +
+    `cognitive/cap.coordinate.cpm-plan`, run
+    `wf_de8c3c36b80b405ba445eac5cff9907a`, audit-verified: `next_round` →
+    `schedule` (plan reused, `fetch_schedule` returned the spent schedule)
+    → `acquire` (exhausted, null deliverable) → `fan_in` → `verifying`, all
+    within ONE second at v289→294). The design comment promises "same
+    matrix, fresh plan, patched code; the fan-in log resets" — the log
+    resets, the plan does not, so every round after the first measures
+    nothing and the anneal's central claim (converged == a fresh
+    re-analysis found zero above-bar findings) is unsound. Downstream the
+    0-candidate falsifying agent step then wedges on AGENT_NO_RESULT —
+    models cannot conform to "submit one observation per candidate" over
+    zero candidates. Fixes: (1) round-scope the plan key (plan_id must
+    incorporate the round counter so `cpm-plan` mints a fresh 56-cell
+    cohort per round); (2) the cell gate's exhausted-edge should
+    distinguish "exhausted because this round analyzed everything" from
+    "exhausted on arrival having analyzed nothing" — the latter is a wiring
+    bug and should halt loudly, not converge silently; (3) same class,
+    adjacent: the falsify and implement stages hand ONE agent step the
+    whole candidate/plan set (168 candidates; a 37-finding hardened plan) —
+    with #12's fixed 900s budget those stages exhaust or silently
+    under-deliver (implement shipped 2 of 37 findings and self-reported
+    success); bounded-batch sharding needs to be the authored pattern for
+    any per-item agent stage.
+
+## Addendum 13: the sub-workflow reuse record is written only on SUSPEND — a parent whose submit ERRORS mid-dispatch can never harvest its completed child (live finding #18)
+
+18. **`_subworkflow_wait` (the parent-context record that lets a re-driven
+    transition reuse an in-flight child instead of spawning a fresh one) is
+    only persisted when the parent cleanly suspends into waiting — when the
+    child's start/auto-drive path ERRORS the parent's submit is rejected
+    wholesale, no record is written, and a child that later completes (or
+    is completed externally) is unreachable: every re-submit spawns a NEW
+    child from scratch** (engine, praxec v0.0.28, run
+    `wf_de8c3c36b80b405ba445eac5cff9907a` + child
+    `wf_b18af70533324f2bb966d315469b4e83`). Sequence: verify → child
+    spawned → child's falsifying agent step exhausted its chain (#12/#15
+    conditions) → error propagated → parent submit REJECTED at `verifying`
+    with no wait record — while the child persisted at `falsifying` v1,
+    was fulfilled externally (the 168 observations submitted by hand), and
+    completed with the full partition (145 verified / 37 above-bar). The
+    engine's own re-drive logic ("re-check the recorded child once … it
+    may already be terminal — advance") does exactly the right thing — but
+    only if the record exists, and nothing on the error path writes it.
+    Recovery required direct store surgery: planting the two-field record
+    in the parent row, after which the very next `verify` submit harvested
+    the child and chained cleanly through the convergence gate. Ask: write
+    the child binding at SPAWN (the moment the child id exists), not at
+    suspend — the reuse check is already keyed by transition name, so an
+    errored dispatch becomes recoverable for free, and externally-rescued
+    children (the #11/#12 world we actually operate in) stop being
+    unreachable orphans.
