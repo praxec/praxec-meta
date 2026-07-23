@@ -201,3 +201,33 @@ same-definition agent leaf (it is silently dead config today).
     whose state has auto-drivable agent transitions; (b) surface such orphaned
     runs in `praxec health` / `inspect` as "stalled: needs re-drive" instead
     of an indistinguishable "running".
+
+## Addendum 7: auto-drive's step budget is unconfigurable — `auto_drive_max_seconds` is dead weight beyond the 900s default (live finding #12)
+
+12. **Auto-drive's step budget is unconfigurable: `auto_drive_max_seconds` is
+    dead weight beyond the 900s default** (engine, praxec v0.0.28, driving
+    `wf_de8c3c36b80b405ba445eac5cff9907a`). The `analyzing_nielsen` agent leaf
+    (a 41-file surface analysis) failed with `agent step budget exhausted
+    mid-chain-walk; surfacing instead of escalating models_tried=2
+    budget_seconds=900` — the first model
+    (`openrouter:deepseek/deepseek-v4-pro`) timed out at 762s, leaving <140s
+    for the escalation rung. Kernel analysis (praxec-kernel origin/main):
+    `crates/praxec-agents/src/executor.rs` clamps every attempt's wall to the
+    remaining `step_budget_seconds` (default `DEFAULT_STEP_BUDGET_SECONDS =
+    900`, config.rs exposes it per-step), but
+    `crates/praxec-core/src/runtime/runtime_chain.rs` synthesizes the
+    auto-drive agent config with ONLY `"max_seconds":
+    self.auto_drive_max_seconds` — it never sets `step_budget_seconds`, and no
+    gateway key or per-state YAML override reaches it on the auto-drive path.
+    Consequence: the operator raised `auto_drive_max_seconds: 600→1800`
+    precisely so "real code deliverables get room" (the config comment), but
+    the effective ceiling for any auto-driven leaf remains min(1800, 900) =
+    900s — the raise is silently inert, and any leaf whose honest work exceeds
+    900s can NEVER complete under auto-drive; the operator must hand-fulfill
+    the agent step externally (compounding finding #11's no-resume-verb).
+    Asks: (a) plumb a gateway-level
+    `praxec.agents.auto_drive_step_budget_seconds` (and/or honor a per-state
+    `step_budget_seconds` like `reasoning_effort` already is) into the
+    synthesized auto-drive config; (b) when `auto_drive_max_seconds` exceeds
+    the effective step budget, warn at config load rather than letting the
+    larger knob silently bind nothing.
