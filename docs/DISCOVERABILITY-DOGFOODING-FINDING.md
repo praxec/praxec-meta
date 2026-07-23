@@ -177,3 +177,27 @@ same-definition agent leaf (it is silently dead config today).
     exists to eliminate. Asks: (a) the rig strips/declines tool calls with
     a corrective system nudge and retries N times before giving up;
     (b) classify `RIG_TOOLS_UNSUPPORTED` as transient, not permanent.
+
+## Addendum 6: a gateway restart orphans in-flight auto-driven missions — no chain-resume verb (live finding #11)
+
+11. **A gateway restart orphans in-flight auto-driven missions: no chain-resume
+    verb** (engine, praxec v0.0.28). The gateway restart at 2026-07-23T00:43Z
+    left run `wf_de8c3c36b80b405ba445eac5cff9907a` alive in the store (status
+    `running`, state `analyzing_cognitive_load`, version 21) but permanently
+    stalled. Kernel inspection
+    (`crates/praxec-core/src/runtime/runtime_chain.rs`
+    `run_deterministic_chain`, called only from `runtime.rs` `start` and the
+    `runtime_submit.rs` submit path) shows the chain — which is what carries
+    Mode-B auto-drive of `actor: agent` states — is only entered from `start`
+    and `submit`. A run parked mid-chain at an agent state has exactly one
+    legal link (the agent transition itself), so the ONLY way to re-engage
+    auto-drive is for the external caller to hand-fulfill that agent step's
+    full output contract — defeating Mode-B — and `praxec orchestrate` cannot
+    do it either (finding #10: no ToolHost). Live workaround used: an external
+    agent produced the pending cell's findings per the skill contract and
+    submitted them via `praxec command`, whose in-process chain then resumed
+    auto-drive. Asks: (a) a `resume`/`drive` intent on praxec.command (or an
+    auto-resume scan at gateway startup) that re-enters the chain for runs
+    whose state has auto-drivable agent transitions; (b) surface such orphaned
+    runs in `praxec health` / `inspect` as "stalled: needs re-drive" instead
+    of an indistinguishable "running".
