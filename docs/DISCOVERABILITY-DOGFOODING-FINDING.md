@@ -305,3 +305,36 @@ same-definition agent leaf (it is silently dead config today).
     sub-workflow output fails the parent-side snippet check, the error should
     say WHICH copy of the contract it validated against (frozen vs live) —
     the identical message across both phases cost real diagnosis time.
+
+## Addendum 10: script executor passes bound payloads via argv — blackboard values over ~128KiB make the script unspawnable, and each failed child start leaves an orphan (live finding #15)
+
+15. **Script executor passes bound payloads via argv: any blackboard value
+    over ~128KiB (Linux MAX_ARG_STRLEN) makes the script unspawnable — and
+    each failed child start leaves an orphaned instance** (engine, praxec
+    v0.0.28, run `wf_de8c3c36b80b405ba445eac5cff9907a`). The flow's fan-in
+    accumulated 56 cells of findings into a 389,237-byte blackboard string
+    (the `concat` operator is praxec's ONLY declarative array accumulation,
+    so large strings are the designed outcome of any real fan-in). The
+    falsification cap's initial state binds it as a script arg (`args:
+    ["$.workflow.input.raw_findings"]`); the script executor
+    (`crates/praxec-executors/src/script.rs`) writes only the BODY to a
+    tempfile and passes all bound args via argv with no stdin or file-passing
+    mechanism — so spawn fails with `connection error: script spawn failed
+    (/tmp/...): Argument list too long (os error 7)` and the cap can NEVER
+    start once the log outgrows one page of findings. Compounding: each of
+    the ~25 supervisor-driven verify submits spawned a child that died at the
+    same spawn, leaving 30 orphaned `cap.verify.ux-surface-findings`
+    instances at `normalizing` v0 in the store (verified by direct store
+    inspection) — failed child starts are never reaped. Live workaround
+    (temporary, uncommitted working-tree shim): exported the blackboard value
+    to a file, added an `@file` sentinel to the normalize/partition scripts
+    routing to it, and passed the sentinel instead of the value — the child
+    then started and normalized all 168 deduped candidates. Asks: (1) script
+    executor support for large args — either automatic (any rendered arg
+    over a threshold is written to a tempfile and the path substituted, with
+    an env var or naming convention telling the script) or declarative
+    (`args_via: file|stdin`); (2) `praxec check` should warn when a script
+    arg binds a slot that a `concat` accumulator writes (statically
+    detectable unbounded-growth-into-argv); (3) reap or mark orphaned
+    children whose start failed before the first transition — 30 identical
+    corpses from one wedge distort every store scan and `praxec inspect`.
